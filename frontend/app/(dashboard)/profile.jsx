@@ -1,11 +1,13 @@
-import { StyleSheet, View, ScrollView, Alert, ActivityIndicator, ImageBackground } from 'react-native';
+import { StyleSheet, View, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useColorScheme } from 'react-native';
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedButton from "../../components/ThemedButton";
+import ThemedCard from "../../components/ThemedCard";
 import Spacer from "../../components/Spacer";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
@@ -14,6 +16,8 @@ import { Colors } from '../../constants/Colors';
 
 const Profile = () => {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme] ?? Colors.light;
   const { user: authUser, logout } = useAuth();
   const dispatch = useAppDispatch();
   const { 
@@ -23,6 +27,7 @@ const Profile = () => {
   } = useAppSelector((state) => state.user);
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (authUser?.id) {
@@ -59,10 +64,25 @@ const Profile = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              setIsLoggingOut(true);
               await logout();
-              Alert.alert('Success', 'Logged out successfully!');
+              
+              // Show success message
+              Alert.alert('Success', 'Logged out successfully!', [
+                { 
+                  text: 'OK', 
+                  onPress: () => {
+                    // Force navigation to login after successful logout
+                    router.replace('/(auth)/login');
+                  }
+                }
+              ]);
+              
             } catch (error) {
-              Alert.alert('Error', 'Failed to logout');
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            } finally {
+              setIsLoggingOut(false);
             }
           }
         }
@@ -70,16 +90,18 @@ const Profile = () => {
     );
   };
 
-  if (userLoading || isLoading) {
+  if (userLoading || isLoading || isLoggingOut) {
     return (
-      <View style={styles.loadingContainer}>
+      <ThemedView safe style={styles.loadingContainer}>
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={[Colors.primary, '#764ba2']}
           style={StyleSheet.absoluteFill}
         />
         <ActivityIndicator size="large" color="#fff" />
-        <ThemedText style={styles.loadingText}>Loading profile...</ThemedText>
-      </View>
+        <ThemedText style={styles.loadingText}>
+          {isLoggingOut ? 'Logging out...' : 'Loading profile...'}
+        </ThemedText>
+      </ThemedView>
     );
   }
 
@@ -88,22 +110,54 @@ const Profile = () => {
     : authUser?.email?.split('@')[0] || 'User';
   
   const displayEmail = authUser?.email || userData?.email || 'No email';
-  const displayCIN = userData?.cin ? `CIN: ${userData.cin}` : '';
-  const displayRole = userData?.role ? `Role: ${userData.role}` : '';
 
   return (
-    <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-      {/* Background Header */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.headerBackground}
+    <ThemedView safe style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.headerOverlay}>
+        {/* Header with Back and Action Buttons */}
+        <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
           <View style={styles.headerContent}>
-            {/* Avatar */}
+            <Ionicons 
+              name="arrow-back" 
+              size={24} 
+              color={theme.iconColorFocused} 
+              onPress={() => router.back()}
+              style={styles.headerIcon}
+            />
+            <ThemedText title style={styles.headerTitle}>
+              Profile
+            </ThemedText>
+            <View style={styles.headerActions}>
+              <Ionicons 
+                name="create-outline" 
+                size={22} 
+                color={theme.iconColorFocused} 
+                onPress={handleEditProfile}
+                style={styles.headerIcon}
+              />
+              <Ionicons 
+                name="log-out-outline" 
+                size={22} 
+                color={Colors.warning} 
+                onPress={handleLogout}
+                style={[styles.headerIcon, isLoggingOut && styles.disabledIcon]}
+                disabled={isLoggingOut}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Profile Content */}
+        <View style={styles.content}>
+          {/* Profile Header Card */}
+          <ThemedCard style={styles.profileHeaderCard}>
             <View style={styles.avatarContainer}>
               <LinearGradient
-                colors={['#ffffff', '#f8f9fa']}
+                colors={[Colors.primary, '#764ba2']}
                 style={styles.avatarGradient}
               >
                 <ThemedText style={styles.avatarText}>
@@ -113,178 +167,110 @@ const Profile = () => {
               <View style={styles.onlineIndicator} />
             </View>
 
-            {/* User Info */}
-            <ThemedText title={true} style={styles.userName}>
+            <ThemedText title style={styles.userName}>
               {displayName}
             </ThemedText>
             <ThemedText style={styles.userEmail}>
               {displayEmail}
             </ThemedText>
+          </ThemedCard>
+
+          <Spacer height={20} />
+
+          {/* Personal Information Card */}
+          <ThemedCard style={styles.infoCard}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="information-circle-outline" size={22} color={Colors.primary} />
+              <ThemedText title style={styles.cardTitle}>
+                Personal Information
+              </ThemedText>
+            </View>
             
-            {/* Stats */}
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Ionicons name="person-outline" size={20} color="#fff" />
-                <ThemedText style={styles.statText}>
-                  {userData?.role || 'USER'}
-                </ThemedText>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <View style={[styles.infoIconContainer, { backgroundColor: theme.uiBackground }]}>
+                  <Ionicons name="person" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <ThemedText style={styles.infoLabel}>First Name</ThemedText>
+                  <ThemedText style={styles.infoValue}>
+                    {userData?.firstname || 'Not set'}
+                  </ThemedText>
+                </View>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Ionicons name="key-outline" size={20} color="#fff" />
-                <ThemedText style={styles.statText}>
-                  {userData?.cin || 'N/A'}
-                </ThemedText>
+
+              <View style={styles.infoItem}>
+                <View style={[styles.infoIconContainer, { backgroundColor: theme.uiBackground }]}>
+                  <Ionicons name="people" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <ThemedText style={styles.infoLabel}>Last Name</ThemedText>
+                  <ThemedText style={styles.infoValue}>
+                    {userData?.lastname || 'Not set'}
+                  </ThemedText>
+                </View>
+              </View>
+
+              <View style={styles.infoItem}>
+                <View style={[styles.infoIconContainer, { backgroundColor: theme.uiBackground }]}>
+                  <Ionicons name="card" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <ThemedText style={styles.infoLabel}>CIN</ThemedText>
+                  <ThemedText style={styles.infoValue}>
+                    {userData?.cin || 'Not set'}
+                  </ThemedText>
+                </View>
+              </View>
+
+              <View style={styles.infoItem}>
+                <View style={[styles.infoIconContainer, { backgroundColor: theme.uiBackground }]}>
+                  <Ionicons name="mail" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <ThemedText style={styles.infoLabel}>Email</ThemedText>
+                  <ThemedText style={styles.infoValue}>
+                    {displayEmail}
+                  </ThemedText>
+                </View>
+              </View>
+
+              <View style={styles.infoItem}>
+                <View style={[styles.infoIconContainer, { backgroundColor: theme.uiBackground }]}>
+                  <Ionicons name="shield-checkmark" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.infoContent}>
+                  <ThemedText style={styles.infoLabel}>Role</ThemedText>
+                  <ThemedText style={styles.infoValue}>
+                    {userData?.role || 'USER'}
+                  </ThemedText>
+                </View>
               </View>
             </View>
-          </View>
+          </ThemedCard>
+
+          <Spacer height={40} />
+
+          {/* Debug Info (only in development) */}
+          {__DEV__ && userError && (
+            <View style={[styles.debugContainer, { backgroundColor: theme.uiBackground }]}>
+              <ThemedText style={styles.debugTitle}>Debug Info:</ThemedText>
+              <ThemedText style={styles.debugText}>
+                {typeof userError === 'string' ? userError : JSON.stringify(userError, null, 2)}
+              </ThemedText>
+            </View>
+          )}
         </View>
-      </LinearGradient>
-
-      {/* Main Content */}
-      <View style={styles.content}>
-        {/* Personal Information Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="information-circle-outline" size={24} color={Colors.primary} />
-            <ThemedText title={true} style={styles.cardTitle}>
-              Personal Information
-            </ThemedText>
-          </View>
-          
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="person" size={20} color="#667eea" />
-              </View>
-              <View style={styles.infoContent}>
-                <ThemedText style={styles.infoLabel}>First Name</ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  {userData?.firstname || 'Not set'}
-                </ThemedText>
-              </View>
-            </View>
-
-            <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="people" size={20} color="#667eea" />
-              </View>
-              <View style={styles.infoContent}>
-                <ThemedText style={styles.infoLabel}>Last Name</ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  {userData?.lastname || 'Not set'}
-                </ThemedText>
-              </View>
-            </View>
-
-            <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="card" size={20} color="#667eea" />
-              </View>
-              <View style={styles.infoContent}>
-                <ThemedText style={styles.infoLabel}>CIN</ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  {userData?.cin || 'Not set'}
-                </ThemedText>
-              </View>
-            </View>
-
-            <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="mail" size={20} color="#667eea" />
-              </View>
-              <View style={styles.infoContent}>
-                <ThemedText style={styles.infoLabel}>Email</ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  {displayEmail}
-                </ThemedText>
-              </View>
-            </View>
-
-            <View style={styles.infoItem}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="shield-checkmark" size={20} color="#667eea" />
-              </View>
-              <View style={styles.infoContent}>
-                <ThemedText style={styles.infoLabel}>Role</ThemedText>
-                <ThemedText style={styles.infoValue}>
-                  {userData?.role || 'USER'}
-                </ThemedText>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <Spacer height={20} />
-
-        {/* Quick Actions Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="settings-outline" size={24} color={Colors.primary} />
-            <ThemedText title={true} style={styles.cardTitle}>
-              Quick Actions
-            </ThemedText>
-          </View>
-          
-          <View style={styles.actionsGrid}>
-            <ThemedButton 
-              onPress={handleEditProfile}
-              style={styles.actionButton}
-            >
-              <View style={styles.actionContent}>
-                <Ionicons name="create-outline" size={24} color="#fff" />
-                <ThemedText style={styles.actionText}>Edit Profile</ThemedText>
-              </View>
-            </ThemedButton>
-
-            <ThemedButton 
-              onPress={() => router.push('/(dashboard)')}
-              style={[styles.actionButton, styles.secondaryButton]}
-            >
-              <View style={styles.actionContent}>
-                <Ionicons name="home-outline" size={24} color="#fff" />
-                <ThemedText style={styles.actionText}>Dashboard</ThemedText>
-              </View>
-            </ThemedButton>
-          </View>
-        </View>
-
-        <Spacer height={20} />
-
-        {/* Logout Button */}
-        <ThemedButton 
-          onPress={handleLogout}
-          style={styles.logoutButton}
-        >
-          <View style={styles.logoutContent}>
-            <Ionicons name="log-out-outline" size={24} color="#fff" />
-            <ThemedText style={styles.logoutText}>Logout</ThemedText>
-          </View>
-        </ThemedButton>
-
-        <Spacer height={40} />
-
-        {/* Debug Info (only in development) */}
-        {__DEV__ && userError && (
-          <View style={styles.debugContainer}>
-            <ThemedText style={styles.debugTitle}>Debug Info:</ThemedText>
-            <ThemedText style={styles.debugText}>
-              {typeof userError === 'string' ? userError : JSON.stringify(userError, null, 2)}
-            </ThemedText>
-          </View>
-        )}
-
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </ThemedView>
   );
 };
 
 export default Profile;
 
 const styles = StyleSheet.create({
-  scrollView: {
+  container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   loadingContainer: {
     flex: 1,
@@ -296,107 +282,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
   },
-  headerBackground: {
-    height: 280,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
+  scrollView: {
+    flex: 1,
   },
-  headerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 40,
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  header: {
+    height: 100,
+    justifyContent: 'flex-end',
+    paddingBottom: 15,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   headerContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIcon: {
+    marginLeft: 15,
+    padding: 5,
+  },
+  disabledIcon: {
+    opacity: 0.5,
+  },
+  content: {
+    padding: 20,
+  },
+  profileHeaderCard: {
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
     marginBottom: 20,
   },
   avatarGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
   },
   avatarText: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: 'bold',
-    color: '#667eea',
+    color: '#fff',
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    bottom: 5,
+    right: 5,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     backgroundColor: '#4ade80',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: '#fff',
   },
   userName: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 5,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textAlign: 'center',
   },
   userEmail: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 20,
+    opacity: 0.8,
+    marginBottom: 10,
+    textAlign: 'center',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-    padding: 10,
-    paddingHorizontal: 20,
-    marginTop: 10,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  statText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  statDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  content: {
-    padding: 20,
-    marginTop: -40,
-  },
-  card: {
-    backgroundColor: '#fff',
+  infoCard: {
     borderRadius: 20,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 8,
-    marginBottom: 20,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -409,7 +383,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
     marginLeft: 10,
   },
   infoGrid: {
@@ -423,10 +396,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f8f8f8',
   },
   infoIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f4ff',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
@@ -436,67 +408,18 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 12,
-    color: '#888',
+    opacity: 0.7,
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   infoValue: {
     fontSize: 16,
-    color: '#333',
     fontWeight: '500',
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionButton: {
-    flex: 1,
-    marginHorizontal: 5,
-    backgroundColor: '#667eea',
-    borderRadius: 15,
-    paddingVertical: 15,
-  },
-  secondaryButton: {
-    backgroundColor: '#764ba2',
-  },
-  actionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  logoutButton: {
-    backgroundColor: '#ef4444',
-    borderRadius: 15,
-    paddingVertical: 16,
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  logoutContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-    marginLeft: 10,
   },
   debugContainer: {
     marginTop: 20,
     padding: 15,
-    backgroundColor: '#f8f8f8',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
@@ -504,12 +427,12 @@ const styles = StyleSheet.create({
   debugTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#666',
+    opacity: 0.7,
     marginBottom: 8,
   },
   debugText: {
     fontSize: 12,
-    color: '#888',
+    opacity: 0.7,
     fontFamily: 'monospace',
   },
 });

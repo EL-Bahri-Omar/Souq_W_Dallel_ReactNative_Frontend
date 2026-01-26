@@ -48,6 +48,24 @@ export const loginUser = createAsyncThunk(
   }
 );
 
+// Create async thunk for logout
+export const logoutUser = createAsyncThunk(
+  'auth/logout',
+  async (_, { rejectWithValue }) => {
+    try {
+      console.log('Logout thunk called');
+      // Clear all auth data from AsyncStorage
+      await AsyncStorage.multiRemove(['token', 'user']);
+      console.log('All auth data cleared from storage');
+      return true;
+    } catch (error) {
+      console.error('Logout thunk error:', error);
+      // Even if storage fails, we should still logout locally
+      return rejectWithValue(error.message || 'Failed to clear storage');
+    }
+  }
+);
+
 export const registerUser = createAsyncThunk(
   'auth/register',
   async (userData, { rejectWithValue }) => {
@@ -84,15 +102,17 @@ const authSlice = createSlice({
     user: null,
     loading: false,
     error: null,
+    logoutLoading: false,
   },
   reducers: {
+    // Keep the synchronous logout for immediate UI update
     logout: (state) => {
-      console.log('Logout action dispatched');
-      // AsyncStorage removal is handled in the component
+      console.log('Sync logout action dispatched');
       state.token = null;
       state.user = null;
       state.error = null;
       state.loading = false;
+      state.logoutLoading = false;
     },
     clearError: (state) => {
       state.error = null;
@@ -125,6 +145,28 @@ const authSlice = createSlice({
         console.log('Login rejected:', action.payload);
         state.loading = false;
         state.error = action.payload;
+        state.token = null;
+        state.user = null;
+      })
+      
+      // Logout cases
+      .addCase(logoutUser.pending, (state) => {
+        console.log('Logout pending');
+        state.logoutLoading = true;
+        state.error = null;
+      })
+      .addCase(logoutUser.fulfilled, (state) => {
+        console.log('Logout fulfilled');
+        state.logoutLoading = false;
+        state.token = null;
+        state.user = null;
+        state.error = null;
+      })
+      .addCase(logoutUser.rejected, (state, action) => {
+        console.log('Logout rejected:', action.payload);
+        state.logoutLoading = false;
+        state.error = action.payload;
+        // Still clear local state even if storage clearing failed
         state.token = null;
         state.user = null;
       })

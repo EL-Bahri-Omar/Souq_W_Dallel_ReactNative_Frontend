@@ -1,7 +1,6 @@
-import { StyleSheet, Text, Alert } from 'react-native';
-import { useState, useEffect } from "react";
+import { StyleSheet, Text, Alert, TouchableWithoutFeedback } from 'react-native';
+import { useState } from "react";
 import { Link, useRouter } from "expo-router";
-import { TouchableWithoutFeedback } from "react-native";
 import { Keyboard } from "react-native";
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
@@ -21,57 +20,22 @@ const Register = () => {
     role: 'USER'
   });
   
-  const [formErrors, setFormErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
-  const { register, loading, error, clearError } = useAuth();
+  const { register, loading, error } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    // Clear success message after 5 seconds
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
-
-  const validateForm = () => {
-    const errors = {};
-    
-    if (!formData.firstname.trim()) errors.firstname = 'First name is required';
-    if (!formData.lastname.trim()) errors.lastname = 'Last name is required';
-    if (!formData.cin.trim()) errors.cin = 'CIN is required';
-    if (!formData.email.trim()) errors.email = 'Email is required';
-    if (!formData.password.trim()) errors.password = 'Password is required';
-    
-    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Email is invalid';
-    }
-    
-    if (formData.password && formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear field error when user types
-    if (formErrors[field]) {
-      setFormErrors(prev => ({ ...prev, [field]: '' }));
-    }
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('Validation Error', 'Please fill all required fields correctly');
+    setSuccessMessage('');
+    
+    // Basic validation
+    if (!formData.firstname || !formData.lastname || !formData.cin || !formData.email || !formData.password) {
+      Alert.alert('Error', 'Please fill all required fields');
       return;
     }
-    
-    setSuccessMessage('');
     
     try {
       await register(formData);
@@ -87,67 +51,59 @@ const Register = () => {
         role: 'USER'
       });
       
-      setFormErrors({});
-      
     } catch (err) {
       // Error is handled by Redux
-      console.log('Registration error caught in component:', err);
     }
   };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ThemedView style={styles.container}>
-        <Spacer />
+      <ThemedView safe style={styles.container}>
+        <Spacer height={40} />
         
         <ThemedText title={true} style={styles.title}>
-          Register For an Account
+          Register
         </ThemedText>
 
         <ThemedTextInput
-          style={[styles.input, formErrors.firstname && styles.inputError]}
+          style={styles.input}
           placeholder="First Name"
           onChangeText={(value) => handleChange('firstname', value)}
           value={formData.firstname}
         />
-        {formErrors.firstname && <Text style={styles.errorText}>{formErrors.firstname}</Text>}
 
         <ThemedTextInput
-          style={[styles.input, formErrors.lastname && styles.inputError]}
+          style={styles.input}
           placeholder="Last Name"
           onChangeText={(value) => handleChange('lastname', value)}
           value={formData.lastname}
         />
-        {formErrors.lastname && <Text style={styles.errorText}>{formErrors.lastname}</Text>}
 
         <ThemedTextInput
-          style={[styles.input, formErrors.cin && styles.inputError]}
+          style={styles.input}
           placeholder="CIN"
           keyboardType="numeric"
           onChangeText={(value) => handleChange('cin', value)}
           value={formData.cin}
         />
-        {formErrors.cin && <Text style={styles.errorText}>{formErrors.cin}</Text>}
 
         <ThemedTextInput
-          style={[styles.input, formErrors.email && styles.inputError]}
+          style={styles.input}
           placeholder="Email"
           keyboardType="email-address"
           autoCapitalize="none"
           onChangeText={(value) => handleChange('email', value)}
           value={formData.email}
         />
-        {formErrors.email && <Text style={styles.errorText}>{formErrors.email}</Text>}
 
         <ThemedTextInput
-          style={[styles.input, formErrors.password && styles.inputError]}
-          placeholder="Password (min 6 characters)"
+          style={styles.input}
+          placeholder="Password"
           autoCapitalize="none"
           onChangeText={(value) => handleChange('password', value)}
           value={formData.password}
           secureTextEntry
         />
-        {formErrors.password && <Text style={styles.errorText}>{formErrors.password}</Text>}
 
         <ThemedButton 
           onPress={handleSubmit} 
@@ -171,7 +127,7 @@ const Register = () => {
 
         <Link href='/login'>
           <ThemedText style={{ textAlign: 'center'}}>
-            Already have an account? Login instead
+            Already have an account? Login
           </ThemedText>
         </Link>
       </ThemedView>
@@ -184,29 +140,19 @@ export default Register;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 20,
   },
   title: {
     textAlign: 'center',
-    fontSize: 21,
-    marginBottom: 30
+    fontSize: 28,
+    marginBottom: 30,
+    fontWeight: 'bold',
   },
   input: {
     width: '100%',
-    marginBottom: 10,
-  },
-  inputError: {
-    borderWidth: 1,
-    borderColor: Colors.warning,
-  },
-  errorText: {
-    color: Colors.warning,
-    fontSize: 12,
-    marginBottom: 10,
-    alignSelf: 'flex-start',
-    marginLeft: '10%',
+    marginBottom: 15,
   },
   success: {
     color: 'green',
@@ -232,10 +178,5 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
-  },
-  note: {
-    color: '#888',
-    fontSize: 12,
-    marginTop: 10,
   }
 });

@@ -28,8 +28,8 @@ const Login = () => {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <Spacer />
+    <ThemedView safe style={styles.container}>
+      <Spacer height={40} />
       
       <ThemedText title={true} style={styles.title}>
         Login
@@ -92,8 +92,9 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: 'center',
-    fontSize: 24,
-    marginBottom: 30
+    fontSize: 28,
+    marginBottom: 30,
+    fontWeight: 'bold',
   },
   input: {
     width: '100%',

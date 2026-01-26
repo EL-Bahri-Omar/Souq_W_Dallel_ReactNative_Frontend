@@ -1,10 +1,14 @@
 import { StyleSheet, View, ScrollView, Alert, Keyboard } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useColorScheme } from 'react-native';
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedButton from "../../components/ThemedButton";
 import ThemedTextInput from "../../components/ThemedTextInput";
+import ThemedCard from "../../components/ThemedCard";
 import Spacer from "../../components/Spacer";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
@@ -13,6 +17,8 @@ import { Colors } from '../../constants/Colors';
 
 const EditProfile = () => {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme] ?? Colors.light;
   const { user: authUser } = useAuth();
   const dispatch = useAppDispatch();
   const { user: userData, loading } = useAppSelector((state) => state.user);
@@ -139,131 +145,257 @@ const EditProfile = () => {
   };
 
   return (
-    <ScrollView style={styles.scrollView}>
-      <ThemedView style={styles.container}>
-        
-        <ThemedText title={true} style={styles.title}>
-          Edit Profile
-        </ThemedText>
-        
-        <Spacer height={20} />
-
-        <View style={styles.form}>
-          <ThemedTextInput
-            style={[styles.input, errors.firstname && styles.inputError]}
-            placeholder="First Name *"
-            value={formData.firstname}
-            onChangeText={(value) => handleChange('firstname', value)}
-          />
-          {errors.firstname && <ThemedText style={styles.errorText}>{errors.firstname}</ThemedText>}
-
-          <ThemedTextInput
-            style={[styles.input, errors.lastname && styles.inputError]}
-            placeholder="Last Name *"
-            value={formData.lastname}
-            onChangeText={(value) => handleChange('lastname', value)}
-          />
-          {errors.lastname && <ThemedText style={styles.errorText}>{errors.lastname}</ThemedText>}
-
-          <ThemedTextInput
-            style={[styles.input, errors.cin && styles.inputError]}
-            placeholder="CIN *"
-            keyboardType="numeric"
-            value={formData.cin}
-            onChangeText={(value) => handleChange('cin', value)}
-          />
-          {errors.cin && <ThemedText style={styles.errorText}>{errors.cin}</ThemedText>}
-
-          <ThemedTextInput
-            style={[styles.input, errors.email && styles.inputError]}
-            placeholder="Email *"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={formData.email}
-            onChangeText={(value) => handleChange('email', value)}
-          />
-          {errors.email && <ThemedText style={styles.errorText}>{errors.email}</ThemedText>}
-
-          <Spacer height={20} />
-
-          <ThemedText style={styles.sectionTitle}>
-            Change Password (optional)
-          </ThemedText>
-          <ThemedText style={styles.sectionSubtitle}>
-            Leave blank to keep current password
-          </ThemedText>
-
-          <ThemedTextInput
-            style={[styles.input, errors.password && styles.inputError]}
-            placeholder="New Password"
-            secureTextEntry
-            value={formData.password}
-            onChangeText={(value) => handleChange('password', value)}
-          />
-          {errors.password && <ThemedText style={styles.errorText}>{errors.password}</ThemedText>}
-
-          <ThemedTextInput
-            style={[styles.input, errors.confirmPassword && styles.inputError]}
-            placeholder="Confirm New Password"
-            secureTextEntry
-            value={formData.confirmPassword}
-            onChangeText={(value) => handleChange('confirmPassword', value)}
-          />
-          {errors.confirmPassword && <ThemedText style={styles.errorText}>{errors.confirmPassword}</ThemedText>}
-        </View>
-
-        <Spacer height={30} />
-
-        <View style={styles.buttonsContainer}>
-          <ThemedButton
-            onPress={handleSubmit}
-            disabled={isSubmitting || loading}
-            style={[styles.submitButton, (isSubmitting || loading) && styles.disabledButton]}
-          >
-            <ThemedText style={styles.buttonText}>
-              {isSubmitting ? 'Updating...' : 'Update Profile'}
+    <ThemedView safe style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Header with Back Button */}
+        <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
+          <View style={styles.headerContent}>
+            <Ionicons 
+              name="arrow-back" 
+              size={24} 
+              color={theme.iconColorFocused} 
+              onPress={() => router.push('/(dashboard)/profile')}
+              style={styles.backButton}
+            />
+            <ThemedText title style={styles.headerTitle}>
+              Edit Profile
             </ThemedText>
-          </ThemedButton>
-
-          <Spacer height={15} />
-
-          <ThemedButton
-            onPress={() => router.back()}
-            style={styles.cancelButton}
-          >
-            <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-          </ThemedButton>
+            <View style={styles.headerRight} />
+          </View>
         </View>
 
-        <Spacer height={40} />
+        {/* Form Section */}
+        <View style={styles.formContainer}>
+          <ThemedCard style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Ionicons name="person-circle-outline" size={40} color={Colors.primary} />
+              <ThemedText title style={styles.formTitle}>
+                Update Your Information
+              </ThemedText>
+              <ThemedText style={styles.formSubtitle}>
+                Make changes to your profile details
+              </ThemedText>
+            </View>
 
-      </ThemedView>
-    </ScrollView>
+            {/* Personal Information */}
+            <View style={styles.section}>
+              <ThemedText title style={styles.sectionTitle}>
+                Personal Information
+              </ThemedText>
+              
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>First Name </ThemedText>
+                <ThemedTextInput
+                  style={[styles.input, errors.firstname && styles.inputError]}
+                  placeholder="Enter your first name"
+                  value={formData.firstname}
+                  onChangeText={(value) => handleChange('firstname', value)}
+                />
+                {errors.firstname && <ThemedText style={styles.errorText}>{errors.firstname}</ThemedText>}
+
+                <ThemedText style={styles.inputLabel}>Last Name </ThemedText>
+                <ThemedTextInput
+                  style={[styles.input, errors.lastname && styles.inputError]}
+                  placeholder="Enter your last name"
+                  value={formData.lastname}
+                  onChangeText={(value) => handleChange('lastname', value)}
+                />
+                {errors.lastname && <ThemedText style={styles.errorText}>{errors.lastname}</ThemedText>}
+
+                <ThemedText style={styles.inputLabel}>CIN </ThemedText>
+                <ThemedTextInput
+                  style={[styles.input, errors.cin && styles.inputError]}
+                  placeholder="Enter your CIN number"
+                  keyboardType="numeric"
+                  value={formData.cin}
+                  onChangeText={(value) => handleChange('cin', value)}
+                />
+                {errors.cin && <ThemedText style={styles.errorText}>{errors.cin}</ThemedText>}
+
+                <ThemedText style={styles.inputLabel}>Email </ThemedText>
+                <ThemedTextInput
+                  style={[styles.input, errors.email && styles.inputError]}
+                  placeholder="Enter your email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={formData.email}
+                  onChangeText={(value) => handleChange('email', value)}
+                />
+                {errors.email && <ThemedText style={styles.errorText}>{errors.email}</ThemedText>}
+              </View>
+            </View>
+
+            {/* Password Section */}
+            <View style={styles.section}>
+              <ThemedText title style={styles.sectionTitle}>
+                Change Password
+                <ThemedText style={styles.optionalText}> (optional)</ThemedText>
+              </ThemedText>
+              <ThemedText style={styles.sectionDescription}>
+                Leave blank to keep your current password
+              </ThemedText>
+              
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>New Password</ThemedText>
+                <ThemedTextInput
+                  style={[styles.input, errors.password && styles.inputError]}
+                  placeholder="Enter new password"
+                  secureTextEntry
+                  value={formData.password}
+                  onChangeText={(value) => handleChange('password', value)}
+                />
+                {errors.password && <ThemedText style={styles.errorText}>{errors.password}</ThemedText>}
+
+                <ThemedText style={styles.inputLabel}>Confirm Password</ThemedText>
+                <ThemedTextInput
+                  style={[styles.input, errors.confirmPassword && styles.inputError]}
+                  placeholder="Confirm new password"
+                  secureTextEntry
+                  value={formData.confirmPassword}
+                  onChangeText={(value) => handleChange('confirmPassword', value)}
+                />
+                {errors.confirmPassword && <ThemedText style={styles.errorText}>{errors.confirmPassword}</ThemedText>}
+              </View>
+            </View>
+          </ThemedCard>
+
+          <Spacer height={30} />
+
+          {/* Action Buttons */}
+          <View style={styles.buttonsContainer}>
+            <ThemedButton
+              onPress={handleSubmit}
+              disabled={isSubmitting || loading}
+              style={[styles.submitButton, (isSubmitting || loading) && styles.disabledButton]}
+            >
+              <View style={styles.buttonContent}>
+                <Ionicons 
+                  name={isSubmitting ? "time-outline" : "checkmark-circle"} 
+                  size={22} 
+                  color="#fff" 
+                />
+                <ThemedText style={styles.buttonText}>
+                  {isSubmitting ? 'Updating...' : 'Save Changes'}
+                </ThemedText>
+              </View>
+            </ThemedButton>
+
+            <Spacer height={15} />
+
+            <ThemedButton
+              onPress={() => router.back()}
+              style={styles.cancelButton}
+              variant="secondary"
+            >
+              <View style={styles.buttonContent}>
+                <Ionicons name="close-circle" size={22} color={theme.text} />
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </View>
+            </ThemedButton>
+          </View>
+
+          <Spacer height={40} />
+        </View>
+      </ScrollView>
+    </ThemedView>
   );
 };
 
 export default EditProfile;
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
-  container: {
-    flex: 1,
-    padding: 20,
+  scrollContent: {
     paddingBottom: 40,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
+  header: {
+    height: 100,
+    justifyContent: 'flex-end',
+    paddingBottom: 15,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
-  form: {
-    marginBottom: 20,
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  backButton: {
+    padding: 5,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  headerRight: {
+    width: 40,
+  },
+  formContainer: {
+    padding: 20,
+  },
+  formCard: {
+    borderRadius: 20,
+    padding: 25,
+  },
+  formHeader: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  formTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: 15,
+    marginBottom: 5,
+    textAlign: 'center',
+  },
+  formSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  section: {
+    marginBottom: 30,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  optionalText: {
+    fontSize: 14,
+    fontWeight: 'normal',
+    opacity: 0.7,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginBottom: 15,
+  },
+  inputGroup: {
+    marginTop: 10,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginBottom: 8,
+    marginTop: 15,
+    opacity: 0.8,
   },
   input: {
-    marginBottom: 10,
+    padding: 14,
+    fontSize: 16,
+    fontWeight: 'bold',
+    borderRadius: 10,
   },
   inputError: {
     borderColor: Colors.warning,
@@ -272,48 +404,40 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.warning,
     fontSize: 12,
-    marginBottom: 10,
-    marginLeft: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 5,
-    color: Colors.primary,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 15,
+    marginTop: 5,
+    marginLeft: 5,
   },
   buttonsContainer: {
     paddingHorizontal: 10,
   },
   submitButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingVertical: 16,
   },
   disabledButton: {
     opacity: 0.6,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   cancelButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingVertical: 16,
   },
-  cancelButtonText: {
-    color: '#666',
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    textAlign: 'center',
+    marginLeft: 10,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
   },
 });

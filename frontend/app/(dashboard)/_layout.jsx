@@ -50,18 +50,9 @@ const DashboardLayout = () => {
         /> 
         <Tabs.Screen 
           name="edit-profile" 
-          options={{
-            title: 'Edit',
-            tabBarIcon: ({ focused }) => (
-              <Ionicons 
-                size={24}
-                name={focused ? 'create' : 'create-outline'}
-                color={focused ? theme.iconColorFocused : theme.iconColor}
-              />
-            )
-          }}
+          options={{ href: null }}
         /> 
-      </Tabs>
+        </Tabs>
     </UserOnly>
   );
 };

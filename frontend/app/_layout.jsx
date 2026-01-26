@@ -6,7 +6,7 @@ import { Provider, useDispatch } from "react-redux";
 import { store } from "../store";
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadToken } from '../store/slices/authSlice';
+import { loadToken, clearError } from '../store/slices/authSlice';
 
 // Component to initialize auth from AsyncStorage
 function AuthInitializer({ children }) {
@@ -15,13 +15,33 @@ function AuthInitializer({ children }) {
   useEffect(() => {
     const loadAuthState = async () => {
       try {
+        // Clear any previous errors
+        dispatch(clearError());
+        
         const token = await AsyncStorage.getItem('token');
         const userStr = await AsyncStorage.getItem('user');
         
+        // Only load if we have both token and user data
         if (token && userStr) {
-          const user = JSON.parse(userStr);
-          dispatch(loadToken({ token, user }));
-          console.log('Auth state loaded from storage');
+          try {
+            const user = JSON.parse(userStr);
+            if (user && user.token && user.email) {
+              dispatch(loadToken({ token, user }));
+              console.log('Auth state loaded from storage');
+            } else {
+              console.log('Invalid user data in storage, clearing...');
+              await AsyncStorage.multiRemove(['token', 'user']);
+            }
+          } catch (parseError) {
+            console.log('Error parsing user data, clearing...');
+            await AsyncStorage.multiRemove(['token', 'user']);
+          }
+        } else {
+          // If we have one but not the other, clear both
+          if (token || userStr) {
+            console.log('Incomplete auth data, clearing...');
+            await AsyncStorage.multiRemove(['token', 'user']);
+          }
         }
       } catch (error) {
         console.log('Error loading auth state:', error);
