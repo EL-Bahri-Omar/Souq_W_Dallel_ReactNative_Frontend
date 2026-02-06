@@ -36,8 +36,8 @@ export const useAuthRedirect = () => {
             }
           } else if (currentPath.includes('auth') || currentPath === '/' || currentPath.includes('verify-account')) {
             // If authenticated and on auth pages, go to dashboard
-            console.log('  Redirecting to dashboard (authenticated)');
-            router.replace('/(dashboard)');
+            console.log(' Redirecting to dashboard (authenticated)');
+            router.replace('/');
           }
         } else if (!currentPath.includes('auth') && currentPath !== '/') {
           // If not authenticated and not on auth pages, go to login

@@ -5,9 +5,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const authService = {
   login: async (email, password) => {
     console.log('Attempting login to:', API_ENDPOINTS.AUTH.LOGIN);
-    const response = await axiosInstance.post(API_ENDPOINTS.AUTH.LOGIN, { 
-      email, 
-      password 
+    const response = await axiosInstance.post(API_ENDPOINTS.AUTH.LOGIN, {
+      email,
+      password
     });
     console.log('Login response:', response.data);
     return response;
@@ -39,9 +39,9 @@ export const authService = {
     // First verify
     await axiosInstance.post(`/api/auth/confirmation/${email}`);
     // Then login
-    const loginResponse = await axiosInstance.post('/api/auth/login', { 
-      email, 
-      password 
+    const loginResponse = await axiosInstance.post('/api/auth/login', {
+      email,
+      password
     });
     return loginResponse;
   },

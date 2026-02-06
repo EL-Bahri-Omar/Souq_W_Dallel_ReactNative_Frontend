@@ -1,3 +1,4 @@
+// components/auth/AuthGuard.js
 import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
@@ -38,15 +39,13 @@ const AuthGuard = ({
     return <ThemedLoader />;
   }
 
-  if (guestOnly && token) {
-    return null;
-  }
-
-  if (userOnly && !token) {
+  // Don't render anything if redirecting
+  if ((userOnly && !token) || (guestOnly && token)) {
     return null;
   }
 
   if (userOnly && user?.status === 'Waiting for validation') {
+    router.replace('/verify-account');
     return null;
   }
 

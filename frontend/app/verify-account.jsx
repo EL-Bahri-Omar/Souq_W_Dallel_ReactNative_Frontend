@@ -64,7 +64,7 @@ const VerifyAccount = () => {
         // If user is already authenticated and activated, redirect to dashboard
         if (user.status !== 'Waiting for validation') {
           console.log('User already authenticated, redirecting to dashboard');
-          router.replace('/(dashboard)');
+          router.replace('/');
         }
       }
     };
@@ -163,7 +163,7 @@ const VerifyAccount = () => {
         
         // Use setTimeout to ensure navigation happens after state update
         setTimeout(() => {
-          router.replace('/(dashboard)');
+          router.replace('/');
         }, 500);
       } else {
         console.log('No token found after verification');
@@ -220,7 +220,7 @@ const VerifyAccount = () => {
           <Spacer height={40} />
           
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={theme.iconColorFocused} />
             </TouchableOpacity>
             <ThemedText title style={styles.headerTitle}>
