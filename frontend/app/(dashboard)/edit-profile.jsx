@@ -4,11 +4,13 @@ import {
   ScrollView, 
   Alert, 
   Keyboard, 
-  TouchableOpacity 
+  TouchableOpacity,
+  Image 
 } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useColorScheme } from 'react-native';
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
@@ -20,7 +22,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { fetchUserById, updateUser } from '../../store/slices/userSlice';
 import { Colors } from '../../constants/Colors';
-import AuthGuard from "../../components/auth/AuthGuard"
+import { userService } from '../../store/services/userService';
 
 const EditProfile = () => {
   const router = useRouter();
@@ -35,11 +37,10 @@ const EditProfile = () => {
     lastname: '',
     cin: '',
     email: '',
-    password: '',
-    confirmPassword: '',
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
     if (authUser?.id) {
@@ -54,8 +55,6 @@ const EditProfile = () => {
         lastname: userData.lastname || '',
         cin: userData.cin ? String(userData.cin) : '',
         email: userData.email || authUser?.email || '',
-        password: '',
-        confirmPassword: '',
       });
     }
   }, [userData]);
@@ -63,9 +62,31 @@ const EditProfile = () => {
   const loadUserData = async () => {
     try {
       await dispatch(fetchUserById(authUser.id)).unwrap();
-    } catch (error) {
-      console.error('Error loading user data:', error);
+    } catch (error) {}
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Sorry, we need camera roll permissions to upload photos.');
+      return;
     }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0]);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
   };
 
   const validateForm = () => {
@@ -91,14 +112,6 @@ const EditProfile = () => {
       newErrors.email = 'Email is invalid';
     }
     
-    if (formData.password && formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-    
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -114,17 +127,17 @@ const EditProfile = () => {
     setIsSubmitting(true);
     
     try {
-      const updateData = {
+      const userUpdateData = {
         firstname: formData.firstname,
         lastname: formData.lastname,
         cin: parseInt(formData.cin),
         email: formData.email,
-        ...(formData.password ? { password: formData.password } : {})
       };
       
       await dispatch(updateUser({
         id: authUser.id,
-        userData: updateData
+        userData: userUpdateData,
+        photoFile: selectedImage
       })).unwrap();
       
       Alert.alert(
@@ -134,7 +147,6 @@ const EditProfile = () => {
       );
       
     } catch (error) {
-      console.error('Update error:', error);
       Alert.alert(
         'Error',
         error.message || 'Failed to update profile. Please try again.'
@@ -151,15 +163,27 @@ const EditProfile = () => {
     }
   };
 
+  const getUserPhotoUrl = () => {
+    if (selectedImage) {
+      return selectedImage.uri;
+    }
+    if (userData?.photoId) {
+      return userService.getUserPhotoUrl(authUser.id, userData.photoId);
+    }
+    return null;
+  };
+
+  const handleResetPassword = () => {
+    router.push('/reset-password');
+  };
+
   return (
-    <AuthGuard userOnly redirectTo="/(auth)/login">
     <ThemedView safe style={styles.container}>
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header with Back Button */}
         <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.push('/(dashboard)/profile')} style={styles.backButton}>
@@ -176,20 +200,48 @@ const EditProfile = () => {
           </View>
         </View>
 
-        {/* Form Section */}
         <View style={styles.formContainer}>
           <ThemedCard style={styles.formCard}>
-            <View style={styles.formHeader}>
-              <Ionicons name="person-circle-outline" size={40} color={Colors.primary} />
-              <ThemedText title style={styles.formTitle}>
-                Update Your Information
+            <View style={styles.photoSection}>
+              <TouchableOpacity 
+                style={styles.photoContainer}
+                onPress={pickImage}
+              >
+                {getUserPhotoUrl() ? (
+                  <Image 
+                    source={{ uri: getUserPhotoUrl() }} 
+                    style={styles.profilePhoto}
+                  />
+                ) : (
+                  <View style={styles.defaultPhoto}>
+                    <Ionicons name="person" size={40} color="#666" />
+                  </View>
+                )}
+                
+                <View style={styles.photoEditButton}>
+                  <Ionicons name="camera" size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
+              
+              <ThemedText style={styles.photoLabel}>
+                Profile Photo
               </ThemedText>
-              <ThemedText style={styles.formSubtitle}>
-                Make changes to your profile details
-              </ThemedText>
+              
+              {selectedImage && (
+                <TouchableOpacity 
+                  style={styles.removePhotoButton}
+                  onPress={removeImage}
+                >
+                  <Ionicons name="trash" size={16} color={Colors.warning} />
+                  <ThemedText style={styles.removePhotoText}>
+                    Remove new photo
+                  </ThemedText>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {/* Personal Information */}
+            <Spacer height={30} />
+
             <View style={styles.section}>
               <ThemedText title style={styles.sectionTitle}>
                 Personal Information
@@ -235,39 +287,26 @@ const EditProfile = () => {
                 />
                 {errors.email && <ThemedText style={styles.errorText}>{errors.email}</ThemedText>}
               </View>
-            </View>
 
-            {/* Password Reset Link */}
-            <View style={styles.section}>
-              <ThemedText title style={styles.sectionTitle}>
-                Password
-              </ThemedText>
-              
-              <TouchableOpacity 
-                style={styles.resetPasswordLink}
-                onPress={() => router.push('/reset-password')}
+              <Spacer height={35} />
+
+              <ThemedButton
+                onPress={handleResetPassword}
+                style={styles.resetPasswordButton}
+                variant="secondary"
               >
-                <Ionicons name="key-outline" size={20} color={Colors.primary} />
-                <ThemedText style={styles.resetPasswordText}>
-                  Reset Password
-                </ThemedText>
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={20} 
-                  color={theme.iconColor} 
-                  style={{ marginLeft: 'auto' }} 
-                />
-              </TouchableOpacity>
-              
-              <ThemedText style={styles.resetPasswordDescription}>
-                Need to change your password? Click above to request a password reset email.
-              </ThemedText>
+                <View style={styles.buttonContent}>
+                  <Ionicons name="lock-closed" size={22} color={Colors.primary} />
+                  <ThemedText style={styles.resetPasswordButtonText}>
+                    Reset Password
+                  </ThemedText>
+                </View>
+              </ThemedButton>
             </View>
           </ThemedCard>
 
           <Spacer height={30} />
 
-          {/* Action Buttons */}
           <View style={styles.buttonsContainer}>
             <ThemedButton
               onPress={handleSubmit}
@@ -304,7 +343,6 @@ const EditProfile = () => {
         </View>
       </ScrollView>
     </ThemedView>
-    </AuthGuard>
   );
 };
 
@@ -350,21 +388,60 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 25,
   },
-  formHeader: {
+  photoSection: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
-  formTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginTop: 15,
-    marginBottom: 5,
-    textAlign: 'center',
+  photoContainer: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+    marginBottom: 10,
   },
-  formSubtitle: {
+  profilePhoto: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  defaultPhoto: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  photoEditButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  photoLabel: {
     fontSize: 14,
-    opacity: 0.7,
-    textAlign: 'center',
+    opacity: 0.8,
+    marginBottom: 5,
+  },
+  removePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 5,
+  },
+  removePhotoText: {
+    fontSize: 12,
+    color: Colors.warning,
+    marginLeft: 5,
   },
   section: {
     marginBottom: 30,
@@ -372,7 +449,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
+    marginBottom: 20,
   },
   inputGroup: {
     marginTop: 10,
@@ -400,37 +477,30 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginLeft: 5,
   },
-  resetPasswordLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  resetPasswordText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-    color: Colors.primary,
-  },
-  resetPasswordDescription: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginTop: 10,
-    lineHeight: 20,
-  },
   buttonsContainer: {
     paddingHorizontal: 10,
   },
   submitButton: {
     borderRadius: 12,
     paddingVertical: 16,
+    backgroundColor: Colors.primary,
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  resetPasswordButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: -20
+  },
+  resetPasswordButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
+    color: Colors.primary,
   },
   cancelButton: {
     backgroundColor: 'transparent',

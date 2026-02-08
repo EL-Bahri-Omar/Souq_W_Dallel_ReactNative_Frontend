@@ -1,15 +1,14 @@
-import { StyleSheet, Text, Alert, TouchableWithoutFeedback } from 'react-native';
 import { useState } from "react";
+import { StyleSheet, Text, Alert, TouchableWithoutFeedback, TouchableOpacity } from 'react-native';
 import { useRouter } from "expo-router";
 import { Keyboard } from "react-native";
-import { TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
 import ThemedButton from '../../components/ThemedButton';
-import Spacer from '../../components/Spacer';
 import ThemedTextInput from "../../components/ThemedTextInput";
+import Spacer from '../../components/Spacer';
 import { useAuth } from "../../hooks/useAuth";
 import { Colors } from "../../constants/Colors";
 
@@ -31,37 +30,37 @@ const Register = () => {
   };
 
   const handleSubmit = async () => {
-    // Basic validation
     if (!formData.firstname || !formData.lastname || !formData.cin || !formData.email || !formData.password) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
     
     try {
-      // Clear any previous verification data
-      await AsyncStorage.multiRemove(['verificationCode', 'pendingVerificationEmail', 'pendingRegistrationPassword']);
+      await AsyncStorage.multiRemove([
+        'verificationCode', 
+        'pendingVerificationEmail', 
+        'pendingRegistrationPassword'
+      ]);
       
       const result = await register(formData);
       
-      // Check if registration was successful and we have a verification code
       if (result.payload && result.payload.code) {
-        // Store the verification code AND password locally
         await AsyncStorage.setItem('verificationCode', result.payload.code);
         await AsyncStorage.setItem('pendingVerificationEmail', formData.email);
-        await AsyncStorage.setItem('pendingRegistrationPassword', formData.password); // Store password
+        await AsyncStorage.setItem('pendingRegistrationPassword', formData.password);
         
         Alert.alert(
-          'Verification Code Sent',
-          'A 6-digit verification code has been sent to your email. Please check your inbox.',
-          [{ text: 'OK', onPress: () => router.replace('/verify-account') }]
+          'Registration Successful!',
+          `A verification code has been sent to ${formData.email}. You will be logged in automatically after verification.`,
+          [{ 
+            text: 'Verify Now', 
+            onPress: () => router.replace('/(auth)/verify-account') 
+          }]
         );
-      } else {
-        Alert.alert('Error', 'Failed to get verification code. Please try again.');
       }
       
     } catch (err) {
-      // Error is handled by Redux
-      console.error('Registration error:', err);
+      Alert.alert('Registration Failed', err || 'Please try again.');
     }
   };
 

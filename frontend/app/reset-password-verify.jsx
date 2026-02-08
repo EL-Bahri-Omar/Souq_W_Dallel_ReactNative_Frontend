@@ -1,13 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
-  Text, 
   TouchableOpacity, 
   Alert,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme
+  useColorScheme,
+  TextInput,
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,8 +21,7 @@ import ThemedCard from '../components/ThemedCard';
 import ThemedTextInput from '../components/ThemedTextInput';
 import Spacer from '../components/Spacer';
 import { Colors } from '../constants/Colors';
-
-import { TextInput, ActivityIndicator, ScrollView } from 'react-native';
+import { authService } from '../store/services/authService';
 
 const ResetPasswordVerify = () => {
   const router = useRouter();
@@ -95,7 +96,6 @@ const ResetPasswordVerify = () => {
       return;
     }
 
-    // Compare with stored code
     if (verificationCode !== storedCode) {
       Alert.alert('Invalid Code', 'The code you entered does not match. Please try again.');
       return;
@@ -119,23 +119,9 @@ const ResetPasswordVerify = () => {
     setLoading(true);
 
     try {
-      // Call backend to update password
-      const response = await fetch('http://192.168.1.5:8080/api/update-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: userEmail,
-          newPassword: newPassword,
-          code: verificationCode
-        }),
-      });
+      const data = await authService.updatePassword(userEmail, newPassword, verificationCode);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Clear stored data
+      if (data.success) {
         await AsyncStorage.multiRemove(['resetPasswordCode', 'resetPasswordEmail']);
         
         Alert.alert(
@@ -196,7 +182,6 @@ const ResetPasswordVerify = () => {
 
               <Spacer height={30} />
 
-              {/* Code Input Boxes */}
               <View style={styles.codeContainer}>
                 {code.map((digit, index) => (
                   <View 
@@ -266,6 +251,8 @@ const ResetPasswordVerify = () => {
     </ThemedView>
   );
 };
+
+export default ResetPasswordVerify;
 
 const styles = StyleSheet.create({
   container: {
@@ -374,5 +361,3 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 });
-
-export default ResetPasswordVerify;

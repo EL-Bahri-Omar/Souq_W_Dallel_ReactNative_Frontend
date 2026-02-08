@@ -1,3 +1,5 @@
+// Replace the entire file with:
+
 import { useColorScheme } from 'react-native';
 import { Tabs, Stack } from "expo-router";
 import { Colors } from "../constants/Colors";
@@ -7,7 +9,7 @@ import { store } from "../store";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadToken, clearError } from '../store/slices/authSlice';
+import { loadToken } from '../store/slices/authSlice';
 import { useDispatch } from 'react-redux';
 
 export default function RootLayout() {
@@ -25,18 +27,17 @@ function InitializeAuth() {
   
   useEffect(() => {
     const loadAuth = async () => {
-      const token = await AsyncStorage.getItem('token');
-      const userStr = await AsyncStorage.getItem('user');
-      
-      if (token && userStr) {
-        try {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        const userStr = await AsyncStorage.getItem('user');
+        
+        if (token && userStr) {
           const user = JSON.parse(userStr);
-          if (user?.token) {
-            dispatch(loadToken({ token, user }));
-          }
-        } catch {
-          await AsyncStorage.multiRemove(['token', 'user']);
+          dispatch(loadToken({ token, user }));
         }
+      } catch (error) {
+        console.error('❌ Error loading auth state:', error);
+        await AsyncStorage.multiRemove(['token', 'user']);
       }
     };
     
@@ -51,6 +52,7 @@ function AppContent() {
   const theme = Colors[colorScheme] ?? Colors.light;
   const { token } = useSelector((state) => state.auth);
   
+  // Not authenticated - show auth screens
   if (!token) {
     return (
       <Stack screenOptions={{ headerShown: false }}>
@@ -58,11 +60,14 @@ function AppContent() {
         <Stack.Screen name="verify-account" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="reset-password-verify" />
-        <Stack.Screen name="index" />
+        <Stack.Screen name="index" options={{ href: null }} />
+        <Stack.Screen name="create-auction" options={{ href: null }} />
+        <Stack.Screen name="(dashboard)" options={{ href: null }} />
       </Stack>
     );
   }
   
+  // Authenticated - show main app with tabs
   return (
     <Tabs
       screenOptions={{
@@ -89,6 +94,34 @@ function AppContent() {
           ),
         }}
       />
+
+      <Tabs.Screen 
+        name="create-auction" 
+        options={{ 
+          title: 'Create Auction',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons
+              name={focused ? 'add-circle' : 'add-circle-outline'}
+              size={24}
+              color={color}
+            />
+          )
+        }} 
+      />
+      
+      <Tabs.Screen 
+        name="(dashboard)/my-auctions" 
+        options={{ 
+          title: 'My Auctions',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons
+              name={focused ? 'list' : 'list-outline'}
+              size={24}
+              color={color}
+            />
+          )
+        }} 
+      />
       
       <Tabs.Screen
         name="(dashboard)/profile"
@@ -104,12 +137,14 @@ function AppContent() {
         }}
       />
 
-      <Stack.Screen name="(dashboard)/edit-profile" options={{ href: null }}/>
-      <Stack.Screen name="(auth)" options={{ href: null }}/>
-      <Stack.Screen name="verify-account" options={{ href: null }}/>
-      <Stack.Screen name="reset-password" options={{ href: null }}/>
-      <Stack.Screen name="reset-password-verify" options={{ href: null }}/>
-      
+      {/* Hidden screens - not in tab bar */}
+      <Tabs.Screen name="(dashboard)/edit-profile" options={{ href: null }}/>
+      <Tabs.Screen name="edit-auction/[id]" options={{ href: null }}/>
+      <Tabs.Screen name="auction-details/[id]" options={{ href: null }}/>
+      <Tabs.Screen name="(auth)" options={{ href: null }} />
+      <Stack.Screen name="verify-account" options={{ href: null }}  />
+      <Stack.Screen name="reset-password" options={{ href: null }}  />
+      <Stack.Screen name="reset-password-verify" options={{ href: null }}  />
     </Tabs>
   );
 }

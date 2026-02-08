@@ -1,15 +1,14 @@
-import { StyleSheet, Text, Alert } from 'react-native';
-import { useState } from "react";
-import { Link, useRouter} from "expo-router";
-import { TouchableOpacity } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, Alert, TouchableOpacity } from 'react-native';
+import { Link, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
+import ThemedButton from '../../components/ThemedButton';
+import ThemedTextInput from '../../components/ThemedTextInput';
 import Spacer from '../../components/Spacer';
 import { Colors } from '../../constants/Colors';
-import ThemedButton from "../../components/ThemedButton";
-import ThemedTextInput from "../../components/ThemedTextInput";
 import { useAuth } from '../../hooks/useAuth';
 
 const Login = () => {
@@ -27,9 +26,7 @@ const Login = () => {
     try {
       const result = await login(email, password);
       
-      // Check if login result indicates verification is needed
       if (result.payload && result.payload.needsVerification) {
-        // Store the email and code for verification
         if (result.payload.code) {
           await AsyncStorage.setItem('verificationCode', result.payload.code);
           await AsyncStorage.setItem('pendingVerificationEmail', email);
@@ -38,15 +35,22 @@ const Login = () => {
         
         Alert.alert(
           'Verification Required',
-          'Your account needs verification. A code has been sent to your email.',
-          [{ text: 'OK', onPress: () => router.replace('/verify-account') }]
+          'Your account needs verification. A new code has been sent to your email.',
+          [{ 
+            text: 'Enter Code', 
+            onPress: () => router.replace('/(auth)/verify-account') 
+          }]
         );
+        return;
       }
-      // If login is successful without verification needed, it will automatically redirect
-      // via the UserOnly component in the dashboard layout
       
     } catch (err) {
-      // Error is handled by Redux
+      let errorMessage = 'Login failed. Please check your credentials.';
+      if (err && err.includes && err.includes('No response')) {
+        errorMessage = 'Cannot connect to server. Please check your connection.';
+      }
+      
+      Alert.alert('Login Error', errorMessage);
     }
   };
 
@@ -108,12 +112,9 @@ const Login = () => {
           Forgot Password?
         </ThemedText>
       </TouchableOpacity>
-
     </ThemedView>
   );
 };
-
-export default Login;
 
 const styles = StyleSheet.create({
   container: {
@@ -147,3 +148,5 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   }
 });
+
+export default Login;

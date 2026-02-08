@@ -1,0 +1,193 @@
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { auctionService } from '../services/auctionService';
+
+export const fetchAllAuctions = createAsyncThunk(
+  'auction/fetchAll',
+  async (_, { rejectWithValue }) => {
+    try {
+      const auctions = await auctionService.getAllAuctions();
+      return auctions;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const fetchAuctionById = createAsyncThunk(
+  'auction/fetchById',
+  async (auctionId, { rejectWithValue }) => {
+    try {
+      const auction = await auctionService.getAuctionById(auctionId);
+      return auction;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const createAuction = createAsyncThunk(
+  'auction/create',
+  async ({ auctionData, photoFiles = [] }, { rejectWithValue }) => {
+    try {
+      const auction = await auctionService.createAuction(auctionData, photoFiles);
+      return auction;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const updateAuction = createAsyncThunk(
+  'auction/update',
+  async ({ auctionId, auctionData }, { rejectWithValue }) => {
+    try {
+      const auction = await auctionService.updateAuction(auctionId, auctionData);
+      return auction;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const deleteAuction = createAsyncThunk(
+  'auction/delete',
+  async (auctionId, { rejectWithValue }) => {
+    try {
+      await auctionService.deleteAuction(auctionId);
+      return { auctionId };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const fetchUserAuctions = createAsyncThunk(
+  'auction/fetchUserAuctions',
+  async (userId, { rejectWithValue }) => {
+    try {
+      const auctions = await auctionService.getUserAuctions(userId);
+      return auctions;
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+const auctionSlice = createSlice({
+  name: 'auction',
+  initialState: {
+    auctions: [],
+    userAuctions: [],
+    currentAuction: null,
+    loading: false,
+    error: null,
+    creating: false,
+    updating: false,
+    deleting: false,
+  },
+  reducers: {
+    clearAuctions: (state) => {
+      state.auctions = [];
+      state.userAuctions = [];
+      state.currentAuction = null;
+      state.error = null;
+    },
+    clearCurrentAuction: (state) => {
+      state.currentAuction = null;
+    },
+    clearError: (state) => {
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchAllAuctions.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllAuctions.fulfilled, (state, action) => {
+        state.loading = false;
+        state.auctions = action.payload || [];
+      })
+      .addCase(fetchAllAuctions.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      
+      .addCase(fetchAuctionById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAuctionById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentAuction = action.payload;
+      })
+      .addCase(fetchAuctionById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      
+      .addCase(createAuction.pending, (state) => {
+        state.creating = true;
+        state.error = null;
+      })
+      .addCase(createAuction.fulfilled, (state, action) => {
+        state.creating = false;
+        if (action.payload) {
+          state.auctions.unshift(action.payload);
+        }
+      })
+      .addCase(createAuction.rejected, (state, action) => {
+        state.creating = false;
+        state.error = action.payload;
+      })
+      
+      .addCase(updateAuction.pending, (state) => {
+        state.updating = true;
+        state.error = null;
+      })
+      .addCase(updateAuction.fulfilled, (state, action) => {
+        state.updating = false;
+        if (action.payload) {
+          const index = state.auctions.findIndex(a => a.id === action.payload.id);
+          if (index !== -1) {
+            state.auctions[index] = action.payload;
+          }
+        }
+      })
+      .addCase(updateAuction.rejected, (state, action) => {
+        state.updating = false;
+        state.error = action.payload;
+      })
+      
+      .addCase(deleteAuction.pending, (state) => {
+        state.deleting = true;
+        state.error = null;
+      })
+      .addCase(deleteAuction.fulfilled, (state, action) => {
+        state.deleting = false;
+        state.auctions = state.auctions.filter(a => a.id !== action.payload.auctionId);
+        state.userAuctions = state.userAuctions.filter(a => a.id !== action.payload.auctionId);
+      })
+      .addCase(deleteAuction.rejected, (state, action) => {
+        state.deleting = false;
+        state.error = action.payload;
+      })
+      
+      .addCase(fetchUserAuctions.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchUserAuctions.fulfilled, (state, action) => {
+        state.loading = false;
+        state.userAuctions = action.payload || [];
+      })
+      .addCase(fetchUserAuctions.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+  },
+});
+
+export const { clearAuctions, clearCurrentAuction, clearError } = auctionSlice.actions;
+export default auctionSlice.reducer;

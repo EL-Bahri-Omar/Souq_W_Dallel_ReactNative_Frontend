@@ -1,18 +1,29 @@
-import { StyleSheet, View, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { 
+  StyleSheet, 
+  View, 
+  ScrollView, 
+  Alert, 
+  ActivityIndicator,
+  Image,
+  TouchableOpacity,
+  Modal
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useColorScheme } from 'react-native';
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
+import ThemedButton from "../../components/ThemedButton";
 import ThemedCard from "../../components/ThemedCard";
 import Spacer from "../../components/Spacer";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
-import { fetchUserById } from '../../store/slices/userSlice';
+import { fetchUserById, updateUser, deleteUserPhoto } from '../../store/slices/userSlice';
 import { Colors } from '../../constants/Colors';
-import AuthGuard from "../../components/auth/AuthGuard"
+import { userService } from '../../store/services/userService';
 
 const Profile = () => {
   const router = useRouter();
@@ -23,11 +34,14 @@ const Profile = () => {
   const { 
     user: userData, 
     loading: userLoading, 
-    error: userError 
+    error: userError,
+    photoLoading
   } = useAppSelector((state) => state.user);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
     if (authUser?.id) {
@@ -49,6 +63,102 @@ const Profile = () => {
     }
   };
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Sorry, we need camera roll permissions to upload photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0]);
+      setPhotoModalVisible(true);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Sorry, we need camera permissions to take photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0]);
+      setPhotoModalVisible(true);
+    }
+  };
+
+  const uploadPhoto = async () => {
+    if (!selectedImage || !authUser?.id) return;
+
+    try {
+      setIsLoading(true);
+      
+      await dispatch(updateUser({
+        id: authUser.id,
+        userData: {
+          firstname: userData?.firstname || '',
+          lastname: userData?.lastname || '',
+          cin: userData?.cin || 0,
+          email: userData?.email || '',
+        },
+        photoFile: selectedImage
+      })).unwrap();
+      
+      await loadUserData();
+      Alert.alert('Success', 'Profile photo updated!');
+      setPhotoModalVisible(false);
+      setSelectedImage(null);
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      Alert.alert('Error', 'Failed to upload photo');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removePhoto = async () => {
+    if (!authUser?.id) return;
+
+    Alert.alert(
+      'Remove Photo',
+      'Are you sure you want to remove your profile photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await dispatch(deleteUserPhoto(authUser.id)).unwrap();
+              Alert.alert('Success', 'Profile photo removed successfully!');
+            } catch (error) {
+              console.error('Error removing photo:', error);
+              Alert.alert('Error', 'Failed to remove photo. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleEditProfile = () => {
     router.push('/(dashboard)/edit-profile');
   };
@@ -67,12 +177,10 @@ const Profile = () => {
               setIsLoggingOut(true);
               await logout();
               
-              // Show success message
               Alert.alert('Success', 'Logged out successfully!', [
                 { 
                   text: 'OK', 
                   onPress: () => {
-                    // Force navigation to login after successful logout
                     router.replace('/(auth)/login');
                   }
                 }
@@ -111,62 +219,82 @@ const Profile = () => {
   
   const displayEmail = authUser?.email || userData?.email || 'No email';
 
+  const getUserPhotoUrl = () => {
+    if (userData?.photoId) {
+      return userService.getUserPhotoUrl(authUser.id, userData.photoId);
+    }
+    return null;
+  };
+
   return (
-    <AuthGuard userOnly redirectTo="/(auth)/login">
     <ThemedView safe style={styles.container}>
       <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header with Back and Action Buttons */}
         <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
           <View style={styles.headerContent}>
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={theme.iconColorFocused} 
-              onPress={() => router.back()}
-              style={styles.headerIcon}
-            />
+            <TouchableOpacity onPress={() => router.back()} style={styles.headerIcon}>
+              <Ionicons name="arrow-back" size={24} color={theme.iconColorFocused} />
+            </TouchableOpacity>
             <ThemedText title style={styles.headerTitle}>
               Profile
             </ThemedText>
             <View style={styles.headerActions}>
-              <Ionicons 
-                name="create-outline" 
-                size={22} 
-                color={theme.iconColorFocused} 
-                onPress={handleEditProfile}
-                style={styles.headerIcon}
-              />
-              <Ionicons 
-                name="log-out-outline" 
-                size={22} 
-                color={Colors.warning} 
-                onPress={handleLogout}
-                style={[styles.headerIcon, isLoggingOut && styles.disabledIcon]}
+              <TouchableOpacity onPress={handleEditProfile} style={styles.headerIcon}>
+                <Ionicons name="create-outline" size={22} color={theme.iconColorFocused} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleLogout} 
                 disabled={isLoggingOut}
-              />
+                style={styles.headerIcon}
+              >
+                <Ionicons 
+                  name="log-out-outline" 
+                  size={22} 
+                  color={Colors.warning} 
+                />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* Profile Content */}
         <View style={styles.content}>
-          {/* Profile Header Card */}
           <ThemedCard style={styles.profileHeaderCard}>
-            <View style={styles.avatarContainer}>
-              <LinearGradient
-                colors={[Colors.primary, '#764ba2']}
-                style={styles.avatarGradient}
-              >
-                <ThemedText style={styles.avatarText}>
-                  {displayName.charAt(0).toUpperCase()}
-                </ThemedText>
-              </LinearGradient>
+            <TouchableOpacity 
+              style={styles.avatarContainer}
+              onPress={pickImage}
+              disabled={photoLoading}
+            >
+              {getUserPhotoUrl() ? (
+                <Image 
+                  source={{ uri: getUserPhotoUrl() }} 
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={[Colors.primary, '#764ba2']}
+                  style={styles.avatarGradient}
+                >
+                  <ThemedText style={styles.avatarText}>
+                    {displayName.charAt(0).toUpperCase()}
+                  </ThemedText>
+                </LinearGradient>
+              )}
+              
+              {photoLoading ? (
+                <View style={styles.photoLoadingOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              ) : (
+                <View style={styles.photoEditButton}>
+                  <Ionicons name="camera" size={20} color="#fff" />
+                </View>
+              )}
+              
               <View style={styles.onlineIndicator} />
-            </View>
+            </TouchableOpacity>
 
             <ThemedText title style={styles.userName}>
               {displayName}
@@ -178,7 +306,6 @@ const Profile = () => {
 
           <Spacer height={20} />
 
-          {/* Personal Information Card */}
           <ThemedCard style={styles.infoCard}>
             <View style={styles.cardHeader}>
               <Ionicons name="information-circle-outline" size={22} color={Colors.primary} />
@@ -235,36 +362,57 @@ const Profile = () => {
                   </ThemedText>
                 </View>
               </View>
-
-              <View style={styles.infoItem}>
-                <View style={[styles.infoIconContainer, { backgroundColor: theme.uiBackground }]}>
-                  <Ionicons name="shield-checkmark" size={18} color={Colors.primary} />
-                </View>
-                <View style={styles.infoContent}>
-                  <ThemedText style={styles.infoLabel}>Role</ThemedText>
-                  <ThemedText style={styles.infoValue}>
-                    {userData?.role || 'USER'}
-                  </ThemedText>
-                </View>
-              </View>
             </View>
           </ThemedCard>
 
           <Spacer height={40} />
-
-          {/* Debug Info (only in development) */}
-          {__DEV__ && userError && (
-            <View style={[styles.debugContainer, { backgroundColor: theme.uiBackground }]}>
-              <ThemedText style={styles.debugTitle}>Debug Info:</ThemedText>
-              <ThemedText style={styles.debugText}>
-                {typeof userError === 'string' ? userError : JSON.stringify(userError, null, 2)}
-              </ThemedText>
-            </View>
-          )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={photoModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPhotoModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <ThemedText title style={styles.modalTitle}>
+              Preview Photo
+            </ThemedText>
+            
+            {selectedImage && (
+              <Image 
+                source={{ uri: selectedImage.uri }} 
+                style={styles.previewImage}
+              />
+            )}
+            
+            <View style={styles.modalActions}>
+              <ThemedButton
+                onPress={() => setPhotoModalVisible(false)}
+                style={styles.modalButton}
+                variant="secondary"
+              >
+                <ThemedText>Cancel</ThemedText>
+              </ThemedButton>
+              
+              <ThemedButton
+                onPress={uploadPhoto}
+                disabled={isLoading}
+                style={styles.modalButton}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <ThemedText style={{ color: '#fff' }}>Upload</ThemedText>
+                )}
+              </ThemedButton>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
-    </AuthGuard>
   );
 };
 
@@ -315,9 +463,6 @@ const styles = StyleSheet.create({
     marginLeft: 15,
     padding: 5,
   },
-  disabledIcon: {
-    opacity: 0.5,
-  },
   content: {
     padding: 20,
   },
@@ -331,9 +476,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   avatarGradient: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -342,20 +487,56 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 8,
   },
+  avatarImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
+  },
   avatarText: {
-    fontSize: 40,
+    fontSize: 48,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  photoEditButton: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  photoLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   onlineIndicator: {
     position: 'absolute',
     bottom: 5,
     right: 5,
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#4ade80',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#fff',
   },
   userName: {
@@ -367,8 +548,25 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 16,
     opacity: 0.8,
-    marginBottom: 10,
+    marginBottom: 20,
     textAlign: 'center',
+  },
+  photoActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 10,
+  },
+  photoActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  photoActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+    color: Colors.primary,
   },
   infoCard: {
     borderRadius: 20,
@@ -419,22 +617,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  debugContainer: {
-    marginTop: 20,
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  debugTitle: {
-    fontSize: 14,
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    opacity: 0.7,
-    marginBottom: 8,
+    marginBottom: 20,
+    textAlign: 'center',
   },
-  debugText: {
-    fontSize: 12,
-    opacity: 0.7,
-    fontFamily: 'monospace',
+  previewImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 25,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 15,
+  },
+  modalButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

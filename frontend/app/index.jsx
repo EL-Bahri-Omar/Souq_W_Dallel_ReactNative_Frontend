@@ -1,91 +1,186 @@
-import { StyleSheet, View, ScrollView } from 'react-native';
-import { useColorScheme } from 'react-native';
+// app/index.jsx (Home)
+import { useState, useEffect } from 'react';
+import { 
+  StyleSheet, 
+  View, 
+  ScrollView, 
+  TouchableOpacity, 
+  Image,
+  TextInput,
+  FlatList,
+  RefreshControl
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedView from "../components/ThemedView";
-import ThemedLogo from "../components/ThemedLogo";
-import ThemedText from "../components/ThemedText";
-import ThemedCard from "../components/ThemedCard";
-import Spacer from "../components/Spacer";
+import ThemedView from '../components/ThemedView';
+import ThemedText from '../components/ThemedText';
+import ThemedCard from '../components/ThemedCard';
+import Spacer from '../components/Spacer';
+import AuctionCard from '../components/AuctionCard';
 import { useAuth } from '../hooks/useAuth';
+import { useAppDispatch, useAppSelector } from '../hooks/useAppDispatch';
+import { fetchAllAuctions } from '../store/slices/auctionSlice';
 import { Colors } from '../constants/Colors';
 
 const Home = () => {
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme] ?? Colors.light;
+  const router = useRouter();
   const { user } = useAuth();
+  const dispatch = useAppDispatch();
+  const { auctions, loading } = useAppSelector((state) => state.auction);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadAuctions();
+  }, []);
+
+  const loadAuctions = async () => {
+    try {
+      await dispatch(fetchAllAuctions()).unwrap();
+    } catch (error) {
+      console.error('Error loading auctions:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAuctions();
+    setRefreshing(false);
+  };
+
+  const filteredAuctions = auctions.filter(auction => {
+    const matchesSearch = searchQuery === '' || 
+      auction.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      auction.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'all' || 
+      auction.category === selectedCategory;
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  const categories = [
+    { id: 'all', label: 'All' },
+    { id: 'electronics', label: 'Electronics' },
+    { id: 'furniture', label: 'Furniture' },
+    { id: 'vehicles', label: 'Vehicles' },
+    { id: 'real-estate', label: 'Real Estate' },
+    { id: 'collectibles', label: 'Collectibles' },
+  ];
+
+  const displayName = user?.firstname && user?.lastname 
+    ? `${user.firstname} ${user.lastname}`
+    : user?.email?.split('@')[0] || 'User';
 
   return (
     <ThemedView safe style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Header with Logo */}
-        <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
-          <ThemedLogo style={styles.logo} />
-          <Spacer height={10} />
-          <ThemedText title style={styles.welcomeTitle}>
-            {user ? `Welcome, ${user?.email?.split('@')[0] || 'User'}!` : 'Auction App'}
-          </ThemedText>
-          <ThemedText style={styles.welcomeSubtitle}>
-            {user ? 'Browse amazing auctions' : 'Login to start bidding'}
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <Ionicons name="hammer" size={32} color={Colors.primary} />
+          <ThemedText title style={styles.appName}>
+            Souq w Dallel
           </ThemedText>
         </View>
-
-        <View style={styles.content}>
-          {/* Featured Auctions Card */}
-          <ThemedCard style={styles.auctionCard}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="flame" size={24} color={Colors.primary} />
-              <ThemedText title style={styles.cardTitle}>
-                Live Auctions
+        
+        <TouchableOpacity 
+          style={styles.profileContainer}
+          onPress={() => router.push('/(dashboard)/profile')}
+        >
+          <View style={styles.profileInfo}>
+            <ThemedText style={styles.profileName} numberOfLines={1}>
+              {displayName}
+            </ThemedText>
+            <ThemedText style={styles.profileRole} numberOfLines={1}>
+              {user?.role || 'User'}
+            </ThemedText>
+          </View>
+          
+          <View style={styles.photoContainer}>
+            <View style={styles.defaultPhoto}>
+              <ThemedText style={styles.defaultPhotoText}>
+                {displayName.charAt(0).toUpperCase()}
               </ThemedText>
             </View>
-            
-            <ThemedText style={styles.cardDescription}>
-              Discover unique items up for bidding.
-            </ThemedText>
+          </View>
+        </TouchableOpacity>
+      </View>
 
-            {/* Single Auction Item */}
-            <View style={styles.auctionItem}>
-              <View style={styles.auctionIconContainer}>
-                <Ionicons name="watch" size={20} color={theme.iconColor} />
-              </View>
-              <View style={styles.auctionDetails}>
-                <ThemedText style={styles.auctionName}>Vintage Rolex Watch</ThemedText>
-                <View style={styles.auctionInfo}>
-                  <ThemedText style={styles.auctionPrice}>Current: $1,250</ThemedText>
-                  <ThemedText style={styles.auctionTime}>2h 30m</ThemedText>
-                </View>
-              </View>
-            </View>
-          </ThemedCard>
-
-          <Spacer height={15} />
-
-          {/* Categories Section */}
-          <ThemedCard style={styles.categoriesCard}>
-            <ThemedText title style={styles.sectionTitle}>
-              Categories
-            </ThemedText>
-            
-            <View style={styles.categoriesGrid}>
-              <View style={styles.categoryItem}>
-                <Ionicons name="watch" size={20} color={Colors.primary} />
-                <ThemedText style={styles.categoryText}>Watches</ThemedText>
-              </View>
-              
-              <View style={styles.categoryItem}>
-                <Ionicons name="brush" size={20} color={Colors.primary} />
-                <ThemedText style={styles.categoryText}>Art</ThemedText>
-              </View>
-            </View>
-          </ThemedCard>
-
-          <Spacer height={20} />
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search auctions..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#666"
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          ) : null}
         </View>
-      </ScrollView>
+        
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesContainer}
+        >
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category.id}
+              style={[
+                styles.categoryButton,
+                selectedCategory === category.id && styles.categoryButtonActive
+              ]}
+              onPress={() => setSelectedCategory(category.id)}
+            >
+              <ThemedText style={[
+                styles.categoryText,
+                selectedCategory === category.id && styles.categoryTextActive
+              ]}>
+                {category.label}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.actionsBar}>
+        <ThemedText title style={styles.sectionTitle}>
+          Live Auctions
+        </ThemedText>
+      </View>
+
+      <FlatList
+        data={filteredAuctions}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <AuctionCard 
+            auction={item}
+            onPress={() => router.push(`/auction-details/${item.id}`)}
+          />
+        )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        contentContainerStyle={styles.auctionsList}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="hammer" size={60} color="#ccc" />
+            <ThemedText style={styles.emptyText}>
+              No auctions found
+            </ThemedText>
+            <ThemedText style={styles.emptySubtext}>
+              {loading ? 'Loading auctions...' : 'Be the first to create one!'}
+            </ThemedText>
+          </View>
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </ThemedView>
   );
 };
@@ -96,165 +191,136 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 80,
-  },
   header: {
-    height: 180,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 25,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-  },
-  logo: {
-    width: 100,
-    height: 50,
-    resizeMode: 'contain',
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    opacity: 0.8,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  content: {
-    padding: 16,
-    marginTop: -25,
-  },
-  auctionCard: {
-    borderRadius: 16,
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  cardDescription: {
-    fontSize: 13,
-    opacity: 0.7,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  auctionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  auctionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  auctionDetails: {
-    flex: 1,
-  },
-  auctionName: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  auctionInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
-  auctionPrice: {
-    fontSize: 13,
-    fontWeight: '600',
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  appName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginLeft: 10,
     color: Colors.primary,
   },
-  auctionTime: {
-    fontSize: 11,
-    opacity: 0.7,
-  },
-  categoriesCard: {
-    borderRadius: 16,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  categoryItem: {
-    width: '48%',
+  profileContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    padding: 12,
+  },
+  profileInfo: {
+    alignItems: 'flex-end',
+    marginRight: 10,
+    maxWidth: 120,
+  },
+  profileName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  profileRole: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  photoContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: 'hidden',
+    backgroundColor: '#f0f0f0',
+  },
+  defaultPhoto: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  defaultPhotoText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  searchContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    paddingBottom: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
     borderRadius: 10,
-    marginBottom: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginBottom: 15,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  categoriesContainer: {
+    marginBottom: 5,
+  },
+  categoryButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    marginRight: 10,
+  },
+  categoryButtonActive: {
+    backgroundColor: Colors.primary,
   },
   categoryText: {
-    fontSize: 13,
+    fontSize: 14,
+    color: '#666',
+  },
+  categoryTextActive: {
+    color: '#fff',
     fontWeight: '600',
-    marginLeft: 8,
   },
-  statsCard: {
-    borderRadius: 16,
-    padding: 16,
-  },
-  statsGrid: {
+  actionsBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
-  statValue: {
-    fontSize: 24,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 11,
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  loginPromptCard: {
-    borderRadius: 16,
+  auctionsList: {
     padding: 20,
+    paddingTop: 10,
+  },
+  emptyContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
   },
-  loginTitle: {
+  emptyText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 12,
-    marginBottom: 8,
-    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 15,
+    marginBottom: 5,
   },
-  loginText: {
-    fontSize: 13,
+  emptySubtext: {
+    fontSize: 14,
     opacity: 0.7,
     textAlign: 'center',
-    lineHeight: 18,
   },
 });

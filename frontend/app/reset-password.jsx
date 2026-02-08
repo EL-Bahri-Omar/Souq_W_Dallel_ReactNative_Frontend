@@ -100,7 +100,7 @@ const ResetPassword = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <Spacer height={40} />
+          <Spacer height={10} />
           
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -114,9 +114,9 @@ const ResetPassword = () => {
 
           <View style={styles.content}>
             <ThemedCard style={styles.card}>
-              <Ionicons name="lock-closed" size={60} color={Colors.primary} />
+              <Ionicons name="lock-closed" size={40} color={Colors.primary} />
               
-              <Spacer height={20} />
+              <Spacer height={10} />
               
               <ThemedText title style={styles.title}>
                 Reset Your Password
@@ -133,7 +133,7 @@ const ResetPassword = () => {
                 </View>
               ) : null}
 
-              <Spacer height={30} />
+              <Spacer height={20} />
 
               <ThemedTextInput
                 style={styles.input}
@@ -154,8 +154,6 @@ const ResetPassword = () => {
                 editable={!loading}
               />
 
-              <Spacer height={30} />
-
               <ThemedButton
                 onPress={handleSubmit}
                 disabled={loading}
@@ -172,18 +170,6 @@ const ResetPassword = () => {
                   </ThemedText>
                 </View>
               </ThemedButton>
-
-              <Spacer height={20} />
-
-              <TouchableOpacity 
-                onPress={() => router.push('/login')}
-                style={styles.loginLink}
-              >
-                <Ionicons name="arrow-back" size={16} color={Colors.primary} style={{ marginRight: 5 }} />
-                <ThemedText style={styles.loginText}>
-                  Back to Login
-                </ThemedText>
-              </TouchableOpacity>
             </ThemedCard>
 
             <Spacer height={30} />

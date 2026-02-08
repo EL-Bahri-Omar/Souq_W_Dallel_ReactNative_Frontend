@@ -1,17 +1,20 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
-  Text, 
   TouchableOpacity, 
   Alert,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme
+  useColorScheme,
+  TextInput,
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import ThemedView from '../components/ThemedView';
 import ThemedText from '../components/ThemedText';
 import ThemedButton from '../components/ThemedButton';
@@ -20,17 +23,12 @@ import Spacer from '../components/Spacer';
 import { Colors } from '../constants/Colors';
 import { useAppDispatch } from '../hooks/useAppDispatch';
 import { verifyAccount } from '../store/slices/authSlice';
-import { useAuth } from '../hooks/useAuth';
-
-// Add TextInput import
-import { TextInput, ActivityIndicator, ScrollView } from 'react-native';
 
 const VerifyAccount = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme] ?? Colors.light;
+  const theme = Colors[colorScheme] || Colors.light;
   const dispatch = useAppDispatch();
-  const { user } = useAuth();
   
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -42,78 +40,71 @@ const VerifyAccount = () => {
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    loadStoredData();
-    // Start countdown
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    const checkIfAlreadyAuthenticated = async () => {
-      const token = await AsyncStorage.getItem('token');
-      const userStr = await AsyncStorage.getItem('user');
-      
-      if (token && userStr) {
-        const user = JSON.parse(userStr);
+    let timer;
+    
+    const loadStoredData = async () => {
+      try {
+        const savedCode = await AsyncStorage.getItem('verificationCode');
+        const savedEmail = await AsyncStorage.getItem('pendingVerificationEmail');
+        const savedPassword = await AsyncStorage.getItem('pendingRegistrationPassword');
         
-        // If user is already authenticated and activated, redirect to dashboard
-        if (user.status !== 'Waiting for validation') {
-          console.log('User already authenticated, redirecting to dashboard');
-          router.replace('/');
+        if (savedCode) {
+          setStoredCode(savedCode);
         }
-      }
+        
+        if (savedEmail) {
+          setUserEmail(savedEmail);
+        }
+        
+        if (savedPassword) {
+          setUserPassword(savedPassword);
+        }
+        
+        if (savedCode) {
+          timer = setInterval(() => {
+            setCountdown(prev => {
+              if (prev <= 1) {
+                clearInterval(timer);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        }
+        
+        if (!savedCode || !savedEmail) {
+          Alert.alert(
+            'No Verification Found',
+            'Please register first to get a verification code.',
+            [{ text: 'OK', onPress: () => router.replace('/(auth)/register') }]
+          );
+        }
+        
+      } catch (error) {}
     };
 
-    checkIfAlreadyAuthenticated();
+    loadStoredData();
     
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) {
+        clearInterval(timer);
+      }
+    };
   }, []);
-
-  const loadStoredData = async () => {
-    try {
-      const savedCode = await AsyncStorage.getItem('verificationCode');
-      const savedEmail = await AsyncStorage.getItem('pendingVerificationEmail');
-      const savedPassword = await AsyncStorage.getItem('pendingRegistrationPassword');
-      
-      if (savedCode) {
-        setStoredCode(savedCode);
-        console.log('Loaded verification code:', savedCode);
-      }
-      
-      if (savedEmail) {
-        setUserEmail(savedEmail);
-      }
-      
-      if (savedPassword) {
-        setUserPassword(savedPassword);
-      }
-      
-      if (!savedCode || !savedEmail) {
-        Alert.alert(
-          'No Verification Found',
-          'Please register first to get a verification code.',
-          [{ text: 'OK', onPress: () => router.replace('/register') }]
-        );
-      }
-    } catch (error) {
-      console.error('Error loading stored data:', error);
-    }
-  };
 
   const focusNext = (index, value) => {
     if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+      if (inputRefs.current[index + 1]) {
+        inputRefs.current[index + 1].focus();
+      }
     }
   };
 
   const focusPrev = (index, key) => {
     if (key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+      if (inputRefs.current[index - 1]) {
+        inputRefs.current[index - 1].focus();
+      }
     }
   };
 
@@ -136,47 +127,101 @@ const VerifyAccount = () => {
       return;
     }
 
-    // Compare with stored code
     if (verificationCode !== storedCode) {
       Alert.alert('Invalid Code', 'The code you entered does not match. Please try again.');
+      return;
+    }
+
+    if (!userPassword || userPassword.trim() === '') {
+      Alert.alert(
+        'Auto-login Not Possible',
+        'Cannot auto-login: Password not available. Please login manually after verification.',
+        [{ 
+          text: 'Verify Without Auto-login', 
+          onPress: () => handleVerifyWithoutAutoLogin(verificationCode)
+        },
+        { text: 'Cancel', style: 'cancel' }]
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      // Verify account AND login automatically
-      await dispatch(verifyAccount({ 
+      const result = await dispatch(verifyAccount({ 
         email: userEmail,
         password: userPassword
       })).unwrap();
       
-      // Wait a moment for Redux state to update
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Check if we have token in AsyncStorage
-      const token = await AsyncStorage.getItem('token');
-      const userData = await AsyncStorage.getItem('user');
-      
-      if (token && userData) {
-        console.log('Verification and login successful, redirecting to dashboard...');
-        
-        // Use setTimeout to ensure navigation happens after state update
-        setTimeout(() => {
-          router.replace('/');
-        }, 500);
-      } else {
-        console.log('No token found after verification');
-        Alert.alert(
-          'Verification Complete', 
-          'Account verified successfully! Please login with your credentials.',
-          [{ text: 'OK', onPress: () => router.replace('/login') }]
-        );
-      }
+      Alert.alert(
+        'Success!', 
+        'Account verified and logged in successfully!',
+        [{ 
+          text: 'Continue to Home', 
+          onPress: () => {
+            router.replace('/');
+          }
+        }]
+      );
       
     } catch (error) {
-      console.error('Verification error:', error);
-      Alert.alert('Error', error || 'Failed to verify account. Please try again.');
+      let errorMessage = 'Verification failed';
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && error.message) {
+        errorMessage = error.message;
+      }
+      
+      if (errorMessage.includes('Auto-login failed') || errorMessage.includes('Please login manually')) {
+        Alert.alert(
+          'Account Activated', 
+          'Your account has been activated successfully, but auto-login failed. Please login manually.',
+          [{ 
+            text: 'Go to Login', 
+            onPress: () => {
+              AsyncStorage.multiRemove([
+                'verificationCode', 
+                'pendingVerificationEmail', 
+                'pendingRegistrationPassword'
+              ]);
+              router.replace('/(auth)/login');
+            }
+          }]
+        );
+      } else {
+        Alert.alert(
+          'Verification Failed', 
+          errorMessage,
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyWithoutAutoLogin = async (verificationCode) => {
+    setLoading(true);
+    
+    try {
+      Alert.alert(
+        'Account Activated', 
+        'Your account has been activated successfully. Please login with your credentials.',
+        [{ 
+          text: 'Go to Login', 
+          onPress: () => {
+            AsyncStorage.multiRemove([
+              'verificationCode', 
+              'pendingVerificationEmail', 
+              'pendingRegistrationPassword'
+            ]);
+            router.replace('/(auth)/login');
+          }
+        }]
+      );
+      
+    } catch (error) {
+      Alert.alert('Error', 'Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -200,7 +245,6 @@ const VerifyAccount = () => {
       setCountdown(60);
       
     } catch (error) {
-      console.error('Resend error:', error);
       Alert.alert('Error', 'Failed to resend code');
     } finally {
       setResendLoading(false);
@@ -249,7 +293,6 @@ const VerifyAccount = () => {
 
               <Spacer height={30} />
 
-              {/* Code Input Boxes */}
               <View style={styles.codeContainer}>
                 {code.map((digit, index) => (
                   <View 
@@ -330,6 +373,11 @@ const VerifyAccount = () => {
               <ThemedText style={styles.helpText}>
                 • Check your spam folder if you don't see the email
               </ThemedText>
+              {!userPassword && (
+                <ThemedText style={[styles.helpText, { color: Colors.warning }]}>
+                  • ⚠️ Auto-login may not work (password not stored)
+                </ThemedText>
+              )}
             </View>
           </View>
         </ScrollView>

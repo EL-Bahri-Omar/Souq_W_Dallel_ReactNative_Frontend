@@ -1,4 +1,3 @@
-// components/auth/AuthGuard.js
 import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
