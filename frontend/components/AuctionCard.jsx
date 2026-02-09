@@ -5,16 +5,48 @@ import ThemedText from './ThemedText';
 import ThemedCard from './ThemedCard';
 import { Colors } from '../constants/Colors';
 import { auctionService } from '../store/services/auctionService';
+import { userService } from '../store/services/userService';
 
 const AuctionCard = ({ auction, onPress }) => {
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [sellerDetails, setSellerDetails] = useState(null);
   
   useEffect(() => {
+    loadAuctionData();
+  }, [auction]);
+
+  const loadAuctionData = async () => {
+    // Load auction photo
     if (auction?.photoId?.[0]) {
       const url = auctionService.getAuctionPhotoUrl(auction.id, auction.photoId[0]);
       setPhotoUrl(url);
     }
-  }, [auction]);
+
+    // Load seller details
+    await loadSellerDetails();
+  };
+
+  const loadSellerDetails = async () => {
+    try {
+      // If auction already has full seller object
+      if (auction.seller && typeof auction.seller === 'object') {
+        setSellerDetails(auction.seller);
+        return;
+      }
+      
+      // If auction has sellerId, fetch seller
+      const sellerId = auction.sellerId || auction.seller;
+      if (sellerId) {
+        const seller = await userService.getUserById(sellerId);
+        setSellerDetails(seller);
+      } else {
+        setSellerDetails(null);
+      }
+    } catch (error) {
+      console.error('Error loading seller details:', error);
+      setSellerDetails(null);
+    }
+  };
 
   const formatPrice = (price) => {
     return `$${price?.toFixed(2) || '0.00'}`;
@@ -27,6 +59,17 @@ const AuctionCard = ({ auction, onPress }) => {
       case 'ended': return '#ef4444';
       default: return '#666';
     }
+  };
+
+  const getSellerName = () => {
+    if (!sellerDetails) return 'Unknown Seller';
+    return `${sellerDetails.firstname || ''} ${sellerDetails.lastname || ''}`.trim() || sellerDetails.email || 'Unknown';
+  };
+
+  const getSellerInitial = () => {
+    if (!sellerDetails) return 'U';
+    const name = sellerDetails.firstname || sellerDetails.email || 'U';
+    return name.charAt(0).toUpperCase();
   };
 
   return (
@@ -45,10 +88,12 @@ const AuctionCard = ({ auction, onPress }) => {
             </View>
           )}
           
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(auction.status) }]}>
-            <ThemedText style={styles.statusText}>
-              {auction.status || 'Active'}
-            </ThemedText>
+          <View style={styles.topBadges}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(auction.status) }]}>
+              <ThemedText style={styles.statusText}>
+                {auction.status || 'Active'}
+              </ThemedText>
+            </View>
           </View>
           
           <View style={styles.bidCountBadge}>
@@ -89,7 +134,7 @@ const AuctionCard = ({ auction, onPress }) => {
           <View style={styles.sellerContainer}>
             <View style={styles.sellerAvatar}>
               <ThemedText style={styles.sellerInitial}>
-                {auction.seller?.firstname?.charAt(0)?.toUpperCase() || 'S'}
+                {getSellerInitial()}
               </ThemedText>
             </View>
             <View style={styles.sellerInfo}>
@@ -97,7 +142,7 @@ const AuctionCard = ({ auction, onPress }) => {
                 Seller
               </ThemedText>
               <ThemedText style={styles.sellerName} numberOfLines={1}>
-                {auction.seller?.firstname || 'Unknown'} {auction.seller?.lastname || ''}
+                {getSellerName()}
               </ThemedText>
             </View>
           </View>
@@ -132,10 +177,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statusBadge: {
+  topBadges: {
     position: 'absolute',
     top: 10,
     left: 10,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 5,
+  },
+  statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -144,6 +194,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(104, 73, 167, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   bidCountBadge: {
     position: 'absolute',
