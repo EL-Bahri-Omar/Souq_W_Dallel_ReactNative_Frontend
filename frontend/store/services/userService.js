@@ -52,26 +52,12 @@ export const userService = {
   },
 
   getUserPhotoUrl: (userId, photoId) => {
-    if (!photoId) return null;
-    return `${API_BASE_URL}${API_ENDPOINTS.USER_PHOTO(userId)}`;
+    if (!photoId || !userId) return null;
+    return `${API_BASE_URL}${API_ENDPOINTS.USER_PHOTO(userId)}?t=${Date.now()}`;
   },
 
   deleteUserPhoto: async (userId) => {
     const response = await axiosInstance.delete(API_ENDPOINTS.DELETE_USER_PHOTO(userId));
     return response.data;
   },
-  
-  fetchUserPhoto: async (userId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.USER_PHOTO(userId)}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching user photo:', error);
-      return null;
-    }
-  }
 };

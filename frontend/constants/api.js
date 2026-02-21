@@ -5,8 +5,10 @@ export const API_ENDPOINTS = {
   LOGIN: '/api/auth/login',
   REGISTER: '/api/auth/register',
   VERIFY_ACCOUNT: (email) => `/api/auth/confirmation/${email}`,
+  VALIDATE_ACCOUNT: (email) => `/api/auth/validate/${email}`,
   RESEND_CODE: (email) => `/api/auth/confirmation/${email}/resend`,
   RESET_PASSWORD: '/api/reset-password',
+  UPDATE_PASSWORD: (password) => `/api/user/update-password/${password}`,
   
   // User endpoints
   GET_USER: (id) => `/api/users/id/${id}`,

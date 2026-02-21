@@ -6,9 +6,11 @@ import {
   Image, 
   TouchableOpacity, 
   Alert,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
 import ThemedView from '../../components/ThemedView';
@@ -50,6 +52,8 @@ const AuctionDetails = () => {
   const [auctionPhotos, setAuctionPhotos] = useState([]);
   const [timeRemaining, setTimeRemaining] = useState('');
   const [sellerDetails, setSellerDetails] = useState(null);
+  const [sellerPhotoUrl, setSellerPhotoUrl] = useState(null);
+  const [sellerPhotoRefreshing, setSellerPhotoRefreshing] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
@@ -74,11 +78,37 @@ const AuctionDetails = () => {
       // Calculate time remaining and check expiration
       if (currentAuction.expireDate) {
         checkExpiration();
-        const timer = setInterval(checkExpiration, 60000); // Update every minute
+        const timer = setInterval(checkExpiration, 60000);
         return () => clearInterval(timer);
       }
     }
   }, [currentAuction]);
+
+  useEffect(() => {
+    if (sellerDetails?.photoId) {
+      loadSellerPhoto();
+    } else {
+      setSellerPhotoUrl(null);
+    }
+  }, [sellerDetails]);
+
+  const loadSellerPhoto = async () => {
+    if (!sellerDetails?.photoId) {
+      setSellerPhotoUrl(null);
+      return;
+    }
+
+    try {
+      setSellerPhotoRefreshing(true);
+      const photoUrl = `${userService.getUserPhotoUrl(sellerDetails.id, sellerDetails.photoId)}?t=${Date.now()}`;
+      setSellerPhotoUrl(photoUrl);
+    } catch (error) {
+      console.error('Error loading seller photo:', error);
+      setSellerPhotoUrl(null);
+    } finally {
+      setSellerPhotoRefreshing(false);
+    }
+  };
 
   const checkExpiration = () => {
     if (!currentAuction?.expireDate) return;
@@ -169,17 +199,6 @@ const AuctionDetails = () => {
            date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatLongDate = (isoString) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    return date.toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
   const getCategoryInfo = () => {
     if (!currentAuction?.category) return null;
     return categories[currentAuction.category] || categories.general;
@@ -241,7 +260,6 @@ const AuctionDetails = () => {
                 </View>
               )}
 
-              {/* Status Badge on Image */}
               <View style={[styles.imageStatusBadge, { backgroundColor: getStatusColor(currentAuction.status) }]}>
                 <ThemedText style={styles.imageStatusText}>
                   {getStatusText()}
@@ -291,7 +309,6 @@ const AuctionDetails = () => {
               </ThemedText>
             </View>
 
-            {/* Category Display */}
             {categoryInfo && (
               <View style={styles.categoryContainer}>
                 <Ionicons name={categoryInfo.icon} size={18} color={Colors.primary} />
@@ -310,7 +327,6 @@ const AuctionDetails = () => {
               </View>
             </View>
 
-            {/* Simple expiration container (keep for backward compatibility) */}
             <View style={[styles.expirationContainer, isExpired && styles.expiredContainer]}>
               <Ionicons 
                 name={isExpired ? "alert-circle" : "calendar"} 
@@ -333,9 +349,26 @@ const AuctionDetails = () => {
               <ThemedText style={styles.sectionTitle}>Informations du vendeur</ThemedText>
               <View style={styles.sellerInfo}>
                 <View style={styles.sellerAvatar}>
-                  <ThemedText style={styles.sellerInitial}>
-                    {getSellerInitial()}
-                  </ThemedText>
+                  {sellerPhotoUrl && !sellerPhotoRefreshing ? (
+                    <Image 
+                      source={{ uri: sellerPhotoUrl }} 
+                      style={styles.sellerAvatarImage}
+                      onError={() => setSellerPhotoUrl(null)}
+                    />
+                  ) : (
+                    <LinearGradient
+                      colors={[Colors.primary, '#764ba2']}
+                      style={styles.sellerAvatarGradient}
+                    >
+                      {sellerPhotoRefreshing ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <ThemedText style={styles.sellerInitial}>
+                          {getSellerInitial()}
+                        </ThemedText>
+                      )}
+                    </LinearGradient>
+                  )}
                 </View>
                 <View style={styles.sellerDetails}>
                   <ThemedText style={styles.sellerName}>
@@ -348,7 +381,6 @@ const AuctionDetails = () => {
               </View>
             </View>
 
-            {/* Bid Count */}
             <View style={styles.bidSection}>
               <View style={styles.bidCountContainer}>
                 <Ionicons name="people" size={20} color={Colors.primary} />
@@ -524,54 +556,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.primary,
   },
-  timeSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  expiredTimeSection: {
-    backgroundColor: '#ef4444',
-  },
-  timeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  expiredTimeText: {
-    color: '#fff',
-  },
-  expirationDetailContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#f8f9fa',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-    gap: 15,
-  },
-  expirationDetailText: {
-    flex: 1,
-  },
-  expirationDetailLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
-  },
-  expirationDetailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 3,
-    textTransform: 'capitalize',
-  },
-  expirationDetailTime: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '500',
-  },
   expirationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -619,10 +603,18 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: Colors.primary,
+    marginRight: 15,
+    overflow: 'hidden',
+  },
+  sellerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sellerAvatarGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
   },
   sellerInitial: {
     color: '#fff',

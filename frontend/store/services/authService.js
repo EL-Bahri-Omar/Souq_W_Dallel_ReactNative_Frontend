@@ -174,7 +174,7 @@ export const authService = {
   updatePassword: async (email, cin, newPassword, code) => {
     try {
       const response = await axiosInstance.put(
-        `/api/users/update-password/${newPassword}`,
+        API_ENDPOINTS.UPDATE_PASSWORD(newPassword),
         { 
           email,
           cin: parseInt(cin)

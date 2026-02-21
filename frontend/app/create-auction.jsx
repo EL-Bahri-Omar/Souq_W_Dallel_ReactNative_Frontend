@@ -1392,6 +1392,7 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 10,
     textAlign: 'center',
+    marginTop:'-80'
   },
   timePickerContainer: {
     flexDirection: 'row',

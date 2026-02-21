@@ -1,4 +1,5 @@
-import { StyleSheet, View, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import ThemedText from './ThemedText';
@@ -23,6 +24,8 @@ const categories = {
 const AuctionCard = ({ auction, onPress }) => {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [sellerDetails, setSellerDetails] = useState(null);
+  const [sellerPhotoUrl, setSellerPhotoUrl] = useState(null);
+  const [sellerPhotoRefreshing, setSellerPhotoRefreshing] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState('');
   const [isExpired, setIsExpired] = useState(false);
   
@@ -30,10 +33,36 @@ const AuctionCard = ({ auction, onPress }) => {
     loadAuctionData();
     if (auction?.expireDate) {
       checkExpiration();
-      const timer = setInterval(checkExpiration, 60000); // Check every minute
+      const timer = setInterval(checkExpiration, 60000);
       return () => clearInterval(timer);
     }
   }, [auction]);
+
+  useEffect(() => {
+    if (sellerDetails?.photoId) {
+      loadSellerPhoto();
+    } else {
+      setSellerPhotoUrl(null);
+    }
+  }, [sellerDetails]);
+
+  const loadSellerPhoto = async () => {
+    if (!sellerDetails?.photoId) {
+      setSellerPhotoUrl(null);
+      return;
+    }
+
+    try {
+      setSellerPhotoRefreshing(true);
+      const photoUrl = `${userService.getUserPhotoUrl(sellerDetails.id, sellerDetails.photoId)}?t=${Date.now()}`;
+      setSellerPhotoUrl(photoUrl);
+    } catch (error) {
+      console.error('Error loading seller photo:', error);
+      setSellerPhotoUrl(null);
+    } finally {
+      setSellerPhotoRefreshing(false);
+    }
+  };
 
   const checkExpiration = () => {
     if (!auction?.expireDate) return;
@@ -139,17 +168,7 @@ const AuctionCard = ({ auction, onPress }) => {
     return categories[auction.category] || categories.general;
   };
 
-  const formatExpirationDate = () => {
-    if (!auction?.expireDate) return 'Date non définie';
-    const date = new Date(auction.expireDate);
-    return date.toLocaleDateString('fr-FR') + ' ' + 
-           date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  };
-
   const categoryInfo = getCategoryInfo();
-
-  // Don't render if expired (optional - remove this if you want to show expired auctions)
-  // if (isExpired) return null;
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
@@ -181,8 +200,6 @@ const AuctionCard = ({ auction, onPress }) => {
               {auction.bidders ? Object.keys(auction.bidders).length : 0}
             </ThemedText>
           </View>
-
-          
         </View>
         
         <View style={styles.detailsContainer}>
@@ -216,15 +233,31 @@ const AuctionCard = ({ auction, onPress }) => {
                 </ThemedText>
               </View>
             )}
-
           </View>
           
           <View style={styles.footer}>
             <View style={styles.sellerContainer}>
               <View style={styles.sellerAvatar}>
-                <ThemedText style={styles.sellerInitial}>
-                  {getSellerInitial()}
-                </ThemedText>
+                {sellerPhotoUrl && !sellerPhotoRefreshing ? (
+                  <Image 
+                    source={{ uri: sellerPhotoUrl }} 
+                    style={styles.sellerAvatarImage}
+                    onError={() => setSellerPhotoUrl(null)}
+                  />
+                ) : (
+                  <LinearGradient
+                    colors={[Colors.primary, '#764ba2']}
+                    style={styles.sellerAvatarGradient}
+                  >
+                    {sellerPhotoRefreshing ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <ThemedText style={styles.sellerInitial}>
+                        {getSellerInitial()}
+                      </ThemedText>
+                    )}
+                  </LinearGradient>
+                )}
               </View>
               <View style={styles.sellerInfo}>
                 <ThemedText style={styles.sellerLabel}>
@@ -355,19 +388,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.primary,
   },
-  expirationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    gap: 5,
-  },
-  expirationText: {
-    fontSize: 12,
-    color: '#666',
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -382,10 +402,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  sellerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sellerAvatarGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
   sellerInitial: {
     color: '#fff',
