@@ -34,7 +34,7 @@ const ResetPasswordVerify = () => {
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [userCin, setUserCin] = useState('');
-  const [step, setStep] = useState(1); // 1: code, 2: new password
+  const [step, setStep] = useState(1); 
   const inputRefs = useRef([]);
 
   useEffect(() => {

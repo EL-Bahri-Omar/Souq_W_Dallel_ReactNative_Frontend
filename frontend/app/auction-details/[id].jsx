@@ -22,9 +22,12 @@ import Spacer from '../../components/Spacer';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { fetchAuctionById, placeBid } from '../../store/slices/auctionSlice';
+import { checkPaymentStatus, markAsPaid } from '../../store/slices/paymentSlice';
 import { Colors } from '../../constants/Colors';
 import { auctionService } from '../../store/services/auctionService';
 import { userService } from '../../store/services/userService';
+import PaymentModal from '../../components/PaymentModal';
+import { paymentService } from '../../store/services/paymentService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -49,26 +52,39 @@ const AuctionDetails = () => {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { currentAuction, loading, placingBid } = useAppSelector((state) => state.auction);
+  const { paidUsers } = useAppSelector((state) => state.payment);
   
+  // UI State
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [auctionPhotos, setAuctionPhotos] = useState([]);
-  const [timeRemaining, setTimeRemaining] = useState('');
-  const [timeRemainingDetailed, setTimeRemainingDetailed] = useState('');
   const [sellerDetails, setSellerDetails] = useState(null);
   const [sellerPhotoUrl, setSellerPhotoUrl] = useState(null);
   const [sellerPhotoRefreshing, setSellerPhotoRefreshing] = useState(false);
-  const [isExpired, setIsExpired] = useState(false);
-  const [isLastHour, setIsLastHour] = useState(false);
   const [bidders, setBidders] = useState([]);
   const [bidderNames, setBidderNames] = useState({});
-  const [highestBid, setHighestBid] = useState(0);
   const [showBidModal, setShowBidModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  // Bid State
   const [bidAmount, setBidAmount] = useState('');
-  const [isHighestBidder, setIsHighestBidder] = useState(false);
+  const [highestBid, setHighestBid] = useState(0);
   const [userBid, setUserBid] = useState(0);
+  const [isHighestBidder, setIsHighestBidder] = useState(false);
   const [userParticipated, setUserParticipated] = useState(false);
   const [userWon, setUserWon] = useState(false);
+  const [hasPaidForThisAuction, setHasPaidForThisAuction] = useState(false);
+  
+  // Timer State
+  const [timeRemaining, setTimeRemaining] = useState('');
+  const [timeRemainingDetailed, setTimeRemainingDetailed] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
+  const [isLastHour, setIsLastHour] = useState(false);
+  
+  // Payment State
+  const [hasPaidTax, setHasPaidTax] = useState(false);
+  const [isFirstBid, setIsFirstBid] = useState(true);
 
+  // Load auction data
   useEffect(() => {
     if (id) {
       loadAuction();
@@ -76,56 +92,93 @@ const AuctionDetails = () => {
   }, [id]);
 
   useEffect(() => {
-    if (currentAuction) {
-      // Load auction photos
-      if (currentAuction.photoId?.length > 0) {
-        const photos = currentAuction.photoId.map(photoId => 
-          auctionService.getAuctionPhotoUrl(currentAuction.id, photoId)
-        );
-        setAuctionPhotos(photos);
+    const checkAuctionPayment = async () => {
+      if (user?.id && id) {
+        const paid = await paymentService.hasPaidForAuction(user.id, id);
+        setHasPaidForThisAuction(paid);
       }
+    };
+    
+    checkAuctionPayment();
+  }, [user?.id, id]);
 
-      // Process bidders
-      processBidders();
-
-      // Load seller details
-      loadSellerDetails();
-
-      // Calculate time remaining
-      if (currentAuction.expireDate) {
-        checkExpiration();
-      }
-    }
-  }, [currentAuction]);
-
+  // Check payment status when user changes
   useEffect(() => {
-    if (sellerDetails?.photoId) {
-      loadSellerPhoto();
-    } else {
-      setSellerPhotoUrl(null);
+    if (user?.id) {
+      dispatch(checkPaymentStatus(user.id));
+      setHasPaidTax(paidUsers.includes(user.id));
     }
-  }, [sellerDetails]);
+  }, [user?.id, paidUsers]);
+
+  // Process auction data when it changes
+  useEffect(() => {
+    if (currentAuction) {
+      processAuctionData();
+    }
+  }, [currentAuction, user?.id]);
 
   // Countdown timer effect
   useEffect(() => {
-    if (currentAuction?.expireDate && !isExpired) {
-      checkExpiration();
-      // Update more frequently in last hour (every second)
-      const interval = isLastHour ? 1000 : 60000;
-      const timer = setInterval(checkExpiration, interval);
-      return () => clearInterval(timer);
+    let timer;
+    
+    const startTimer = () => {
+      if (!currentAuction?.expireDate || isExpired) return;
+      
+      const runTimer = () => {
+        checkExpiration();
+        const interval = isLastHour ? 1000 : 60000;
+        if (timer) clearInterval(timer);
+        timer = setInterval(checkExpiration, interval);
+      };
+      
+      runTimer();
+    };
+    
+    startTimer();
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [currentAuction?.expireDate, isExpired, isLastHour]);
+
+  const loadAuction = async () => {
+    try {
+      await dispatch(fetchAuctionById(id)).unwrap();
+    } catch (error) {
+      Alert.alert('Erreur', 'Échec du chargement des détails');
     }
-  }, [currentAuction, isLastHour, isExpired]);
+  };
+
+  const processAuctionData = async () => {
+    // Load auction photos
+    if (currentAuction.photoId?.length > 0) {
+      const photos = currentAuction.photoId.map(photoId => 
+        auctionService.getAuctionPhotoUrl(currentAuction.id, photoId)
+      );
+      setAuctionPhotos(photos);
+    }
+
+    // Process bidders
+    processBidders();
+
+    // Load seller details
+    await loadSellerDetails();
+
+    // Calculate time remaining
+    if (currentAuction.expireDate) {
+      checkExpiration();
+    }
+  };
 
   const loadBidderNames = async (biddersArray) => {
     const names = {};
     for (const bidder of biddersArray) {
       if (bidder.userId && !names[bidder.userId]) {
         try {
-          const user = await userService.getUserById(bidder.userId);
-          const displayName = user?.firstname && user?.lastname 
-            ? `${user.firstname} ${user.lastname}`.trim()
-            : user?.email?.split('@')[0] || 'Utilisateur';
+          const userData = await userService.getUserById(bidder.userId);
+          const displayName = userData?.firstname && userData?.lastname 
+            ? `${userData.firstname} ${userData.lastname}`.trim()
+            : userData?.email?.split('@')[0] || 'Utilisateur';
           names[bidder.userId] = displayName;
         } catch (error) {
           names[bidder.userId] = 'Utilisateur';
@@ -157,6 +210,7 @@ const AuctionDetails = () => {
       const userBidObj = biddersArray.find(b => b.userId === user?.id);
       setUserBid(userBidObj?.amount || 0);
       setUserParticipated(!!userBidObj);
+      setIsFirstBid(!userBidObj);
     }
   };
 
@@ -168,7 +222,9 @@ const AuctionDetails = () => {
 
     try {
       setSellerPhotoRefreshing(true);
-      const photoUrl = `${userService.getUserPhotoUrl(sellerDetails.id, sellerDetails.photoId)}?t=${Date.now()}`;
+      // Make sure we have both seller ID and photo ID
+      const photoUrl = userService.getUserPhotoUrl(sellerDetails.id, sellerDetails.photoId);
+      console.log('Seller photo URL:', photoUrl); // Debug log
       setSellerPhotoUrl(photoUrl);
     } catch (error) {
       console.error('Error loading seller photo:', error);
@@ -178,6 +234,22 @@ const AuctionDetails = () => {
     }
   };
 
+  const loadSellerDetails = async () => {
+    try {
+      if (currentAuction?.sellerId) {
+        const seller = await userService.getUserById(currentAuction.sellerId);
+        setSellerDetails(seller);
+        if (seller?.photoId) {
+          await loadSellerPhoto();
+        }
+      }
+    } catch (error) {
+      console.error('Error loading seller details:', error);
+      setSellerDetails(null);
+    }
+  };
+
+  // Timer functions
   const checkExpiration = () => {
     if (!currentAuction?.expireDate) return;
     
@@ -243,26 +315,7 @@ const AuctionDetails = () => {
     }
   };
 
-  const loadSellerDetails = async () => {
-    try {
-      if (currentAuction?.sellerId) {
-        const seller = await userService.getUserById(currentAuction.sellerId);
-        setSellerDetails(seller);
-      }
-    } catch (error) {
-      console.error('Error loading seller details:', error);
-      setSellerDetails(null);
-    }
-  };
-
-  const loadAuction = async () => {
-    try {
-      await dispatch(fetchAuctionById(id)).unwrap();
-    } catch (error) {
-      Alert.alert('Erreur', 'Échec du chargement des détails');
-    }
-  };
-
+  // Bid handlers
   const handlePlaceBid = () => {
     if (!user) {
       Alert.alert('Connexion requise', 'Veuillez vous connecter pour enchérir');
@@ -279,6 +332,22 @@ const AuctionDetails = () => {
       return;
     }
 
+    // If this is the user's first bid in THIS auction and they haven't paid for it
+    if (isFirstBid && !hasPaidForThisAuction) {
+      setShowPaymentModal(true);
+      return;
+    }
+
+    // Otherwise show the bid modal
+    const minBid = highestBid + 1;
+    setBidAmount(minBid.toString());
+    setShowBidModal(true);
+  };
+
+  // Update handlePaymentComplete
+  const handlePaymentComplete = () => {
+    setHasPaidForThisAuction(true);
+    // Show bid modal after payment
     const minBid = highestBid + 1;
     setBidAmount(minBid.toString());
     setShowBidModal(true);
@@ -318,6 +387,7 @@ const AuctionDetails = () => {
     }
   };
 
+  // Utility functions
   const formatPrice = (price) => {
     return `${price?.toFixed(2) || '0.00'} TND`;
   };
@@ -383,6 +453,7 @@ const AuctionDetails = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Header Section */}
         <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -420,6 +491,7 @@ const AuctionDetails = () => {
               </View>
             </View>
             
+            {/* Thumbnail Images */}
             {auctionPhotos.length > 1 && (
               <View style={styles.thumbnailContainer}>
                 <ScrollView 
@@ -454,8 +526,10 @@ const AuctionDetails = () => {
           </View>
         )}
 
+        {/* Content Section */}
         <View style={styles.content}>
           <ThemedCard style={styles.infoCard}>
+            {/* Title and Category */}
             <View style={styles.titleRow}>
               <ThemedText title style={styles.auctionTitle}>
                 {currentAuction.title}
@@ -471,6 +545,7 @@ const AuctionDetails = () => {
               </View>
             )}
 
+            {/* Price and Time Section */}
             <View style={styles.priceSection}>
               <View>
                 <ThemedText style={styles.priceLabel}>Prix de départ</ThemedText>
@@ -502,6 +577,7 @@ const AuctionDetails = () => {
               </View>
             )}
 
+            {/* Highest Bid Section */}
             <View style={styles.highestBidSection}>
               <ThemedText style={styles.highestBidLabel}>
                 Enchère la plus élevée
@@ -576,6 +652,7 @@ const AuctionDetails = () => {
               </View>
             )}
 
+            {/* Expiration Container */}
             <View style={[styles.expirationContainer, isExpired && styles.expiredContainer]}>
               <Ionicons 
                 name={isExpired ? "close-circle" : "calendar"} 
@@ -587,6 +664,7 @@ const AuctionDetails = () => {
               </ThemedText>
             </View>
 
+            {/* Description Section */}
             <View style={styles.descriptionSection}>
               <ThemedText style={styles.sectionTitle}>Description</ThemedText>
               <ThemedText style={styles.description}>
@@ -594,6 +672,7 @@ const AuctionDetails = () => {
               </ThemedText>
             </View>
 
+            {/* Seller Section */}
             <View style={styles.sellerSection}>
               <ThemedText style={styles.sectionTitle}>Vendeur</ThemedText>
               <View style={styles.sellerInfo}>
@@ -634,9 +713,9 @@ const AuctionDetails = () => {
           {/* Bid Button */}
           {!isExpired && currentAuction.sellerId !== user?.id && (
             <TouchableOpacity
-              style={[styles.bidButton, placingBid && styles.disabledButton]}
+              style={[styles.bidButton, (placingBid || showPaymentModal) && styles.disabledButton]}
               onPress={handlePlaceBid}
-              disabled={placingBid}
+              disabled={placingBid || showPaymentModal}
             >
               <LinearGradient
                 colors={[Colors.primary, '#764ba2']}
@@ -655,7 +734,7 @@ const AuctionDetails = () => {
                   <View style={styles.buttonContent}>
                     <Ionicons name="hammer" size={24} color="#fff" />
                     <ThemedText style={styles.bidButtonText}>
-                      Placer une enchère
+                      {userParticipated ? 'Mettre à jour mon enchère' : 'Placer une enchère'}
                     </ThemedText>
                   </View>
                 )}
@@ -676,7 +755,7 @@ const AuctionDetails = () => {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <ThemedText title style={styles.modalTitle}>
-                Placer une enchère
+                {userParticipated ? 'Mettre à jour mon enchère' : 'Placer une enchère'}
               </ThemedText>
               <TouchableOpacity onPress={() => setShowBidModal(false)}>
                 <Ionicons name="close" size={24} color="#666" />
@@ -738,6 +817,14 @@ const AuctionDetails = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPaymentComplete={handlePaymentComplete}
+        auctionId={id} 
+      />
     </ThemedView>
   );
 };

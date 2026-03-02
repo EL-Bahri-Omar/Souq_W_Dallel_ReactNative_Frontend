@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://192.168.100.20:8080';
+export const API_BASE_URL = 'http://192.168.1.5:8080';
 
 export const API_ENDPOINTS = {
   // Auth endpoints
@@ -29,4 +29,7 @@ export const API_ENDPOINTS = {
   // Notification endpoints
   GET_NOTIFICATIONS: (userId) => `/api/notifications/${userId}`,
   MARK_NOTIFICATION_READ: (id) => `/api/notifications/read/${id}`,
+  
+  // Payment endpoints
+  CREATE_PAYMENT_INTENT: '/api/payment/pay1dt',
 };
