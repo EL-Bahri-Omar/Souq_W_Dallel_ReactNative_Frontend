@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -47,6 +47,9 @@ import { Colors } from '../../constants/Colors';
 const { width: screenWidth } = Dimensions.get('window');
 const isLargeScreen = screenWidth >= 768;
 
+// Allowed notification types for admin
+const ADMIN_NOTIFICATION_TYPES = ['AUCTION_PENDING', 'PARCEL_INVALID'];
+
 const AdminDashboard = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -54,9 +57,7 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { auctions, loading } = useAppSelector((state) => state.auction);
-  const { adminParcels } = useAppSelector((state) => state.parcel);
   const { deposits } = useAppSelector((state) => state.deposit);
-  const { notifications } = useAppSelector((state) => state.notifications);
   
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(isLargeScreen);
@@ -67,6 +68,9 @@ const AdminDashboard = () => {
   const [transporters, setTransporters] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [userNames, setUserNames] = useState({});
+  const [auctionTitles, setAuctionTitles] = useState({});
+  const [allParcels, setAllParcels] = useState([]);
+  const [adminParcelsList, setAdminParcels] = useState([]);
   
   // Modal state
   const [selectedAuction, setSelectedAuction] = useState(null);
@@ -77,6 +81,8 @@ const AdminDashboard = () => {
   const [blockDays, setBlockDays] = useState('7');
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedParcelForAssign, setSelectedParcelForAssign] = useState(null);
+  const [parcelDetailsModalVisible, setParcelDetailsModalVisible] = useState(false);
+  const [selectedParcelDetails, setSelectedParcelDetails] = useState(null);
   
   // Filter state
   const [dateFilter, setDateFilter] = useState('week');
@@ -85,6 +91,7 @@ const AdminDashboard = () => {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [filteredDeposits, setFilteredDeposits] = useState([]);
+  const [userFilter, setUserFilter] = useState('all'); // all, users, admins, transporters, blocked
   
   // UI state
   const [auctionFilter, setAuctionFilter] = useState('all');
@@ -94,12 +101,11 @@ const AdminDashboard = () => {
   const [processingParcelId, setProcessingParcelId] = useState(null);
   const [blockLoading, setBlockLoading] = useState(false);
   const [unblockLoading, setUnblockLoading] = useState(false);
-  const [allParcels, setAllParcels] = useState([]);
-  const [adminParcelsList, setAdminParcels] = useState([]);
   const [pickUpAdress, setPickUpAdress] = useState('');
   const [destinationAdress, setDestinationAdress] = useState('');
   const [selectedAuctionForDeposits, setSelectedAuctionForDeposits] = useState(null);
   const [auctionNames, setAuctionNames] = useState({});
+  const [selectedTransporterId, setSelectedTransporterId] = useState(null);
   
   // Admin notifications state
   const [adminNotifications, setAdminNotifications] = useState([]);
@@ -133,8 +139,20 @@ const AdminDashboard = () => {
     deliveredParcels: 0
   });
 
+  // Use refs to prevent unnecessary re-renders
+  const isMounted = useRef(true);
+  const dataLoaded = useRef(false);
+
   useEffect(() => {
-    loadDashboardData();
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    refreshData();
   }, []);
 
   useEffect(() => {
@@ -144,56 +162,42 @@ const AdminDashboard = () => {
   }, [activeMenu]);
 
   useEffect(() => {
-    const loadAuctionNames = async () => {
-      const names = {};
-      for (const deposit of deposits) {
-        if (deposit.auctionId && !names[deposit.auctionId]) {
-          const auction = auctions.find(a => a.id === deposit.auctionId);
-          if (auction) {
-            names[deposit.auctionId] = auction.title;
-          } else {
-            try {
-              const auctionData = await auctionService.getAuctionById(deposit.auctionId);
-              names[deposit.auctionId] = auctionData.title;
-            } catch (error) {
-              names[deposit.auctionId] = `ID: ${deposit.auctionId.substring(0, 8)}...`;
-            }
-          }
-        }
-      }
-      setAuctionNames(names);
-    };
-    
-    if (deposits.length > 0) {
-      loadAuctionNames();
-    }
-  }, [deposits, auctions]);
-
-  useEffect(() => {
-    if (deposits.length > 0) {
-      const auctionTotal = deposits
-        .filter(d => d.type === 'AUCTION')
-        .reduce((sum, d) => sum + (d.amount || 0), 0);
-      const bidsTotal = deposits
-        .filter(d => d.type === 'BIDS')
-        .reduce((sum, d) => sum + (d.amount || 0), 0);
-      setDepositStats({
-        total: stats.totalDeposits,
-        auction: auctionTotal,
-        bids: bidsTotal
-      });
-    }
-  }, [deposits, stats.totalDeposits]);
-
-  useEffect(() => {
     if (deposits.length > 0) {
       filterDepositsByDate();
     }
-  }, [deposits, dateFilter, customStartDate, customEndDate]);
+  }, [deposits, dateFilter, customStartDate, customEndDate, selectedAuctionForDeposits]);
 
   useEffect(() => {
     loadUserNames();
-  }, [auctions, adminParcels, users]);
+    loadAuctionTitles();
+  }, [auctions, adminParcelsList, users]);
+
+  const refreshData = async () => {
+    await Promise.all([
+      loadDashboardData(),
+      loadParcels()
+    ]);
+  };
+
+  const loadAuctionTitles = async () => {
+    const titles = {};
+    for (const parcel of adminParcelsList) {
+      if (parcel.auctionId && !titles[parcel.auctionId]) {
+        try {
+          const auction = auctions.find(a => a.id === parcel.auctionId);
+          if (auction) {
+            titles[parcel.auctionId] = auction.title;
+          } else {
+            const auctionData = await auctionService.getAuctionById(parcel.auctionId);
+            titles[parcel.auctionId] = auctionData?.title || `Enchère #${parcel.auctionId.substring(0, 8)}`;
+          }
+        } catch (error) {
+          titles[parcel.auctionId] = `Enchère #${parcel.auctionId.substring(0, 8)}`;
+        }
+      }
+    }
+    setAuctionTitles(titles);
+  };
 
   const loadUserNames = async () => {
     const nameMap = {};
@@ -205,23 +209,23 @@ const AdminDashboard = () => {
           const seller = await userService.getUserById(auction.sellerId);
           nameMap[auction.sellerId] = seller ? 
             `${seller.firstname || ''} ${seller.lastname || ''}`.trim() || seller.email : 
-            `ID: ${auction.sellerId.substring(0, 8)}...`;
+            `Utilisateur #${auction.sellerId.substring(0, 8)}`;
         } catch (error) {
-          nameMap[auction.sellerId] = `ID: ${auction.sellerId.substring(0, 8)}...`;
+          nameMap[auction.sellerId] = `Utilisateur #${auction.sellerId.substring(0, 8)}`;
         }
       }
     }
     
     // Load buyer names for parcels
-    for (const parcel of adminParcels) {
+    for (const parcel of adminParcelsList) {
       if (parcel.buyerId && !nameMap[parcel.buyerId]) {
         try {
           const buyer = await userService.getUserById(parcel.buyerId);
           nameMap[parcel.buyerId] = buyer ? 
             `${buyer.firstname || ''} ${buyer.lastname || ''}`.trim() || buyer.email : 
-            `ID: ${parcel.buyerId.substring(0, 8)}...`;
+            `Acheteur #${parcel.buyerId.substring(0, 8)}`;
         } catch (error) {
-          nameMap[parcel.buyerId] = `ID: ${parcel.buyerId.substring(0, 8)}...`;
+          nameMap[parcel.buyerId] = `Acheteur #${parcel.buyerId.substring(0, 8)}`;
         }
       }
       
@@ -230,14 +234,31 @@ const AdminDashboard = () => {
           const transporter = await userService.getUserById(parcel.transporterId);
           nameMap[parcel.transporterId] = transporter ? 
             `${transporter.firstname || ''} ${transporter.lastname || ''}`.trim() || transporter.email : 
-            `ID: ${parcel.transporterId.substring(0, 8)}...`;
+            `Transporteur #${parcel.transporterId.substring(0, 8)}`;
         } catch (error) {
-          nameMap[parcel.transporterId] = `ID: ${parcel.transporterId.substring(0, 8)}...`;
+          nameMap[parcel.transporterId] = `Transporteur #${parcel.transporterId.substring(0, 8)}`;
+        }
+      }
+      
+      // Load seller for parcel
+      if (parcel.auctionId) {
+        const auction = auctions.find(a => a.id === parcel.auctionId);
+        if (auction?.sellerId && !nameMap[auction.sellerId]) {
+          try {
+            const seller = await userService.getUserById(auction.sellerId);
+            nameMap[auction.sellerId] = seller ? 
+              `${seller.firstname || ''} ${seller.lastname || ''}`.trim() || seller.email : 
+              `Vendeur #${auction.sellerId.substring(0, 8)}`;
+          } catch (error) {
+            nameMap[auction.sellerId] = `Vendeur #${auction.sellerId.substring(0, 8)}`;
+          }
         }
       }
     }
     
-    setUserNames(nameMap);
+    if (isMounted.current) {
+      setUserNames(nameMap);
+    }
   };
 
   const loadDashboardData = async () => {
@@ -246,100 +267,55 @@ const AdminDashboard = () => {
       await dispatch(fetchAllDeposits()).unwrap(); 
       
       const usersData = await userService.getAllUsers();
-      setUsers(usersData);
-      
       const transportersData = await userService.getAllTransporters();
-      setTransporters(transportersData);
       
-      // Load parcels for admin
-      await loadParcels();
+      if (isMounted.current) {
+        setUsers(usersData);
+        setTransporters(transportersData);
+      }
       
-      // Load admin notifications
+      // Load admin notifications - filter only allowed types
       if (user?.id) {
         const result = await dispatch(fetchNotifications(user.id)).unwrap();
         const filtered = result.filter(notif => 
-          notif.type === 'AUCTION_PENDING' || 
-          notif.type === 'PARCEL_INVALID'
+          ADMIN_NOTIFICATION_TYPES.includes(notif.type)
         );
-        setAdminNotifications(filtered);
+        if (isMounted.current) {
+          setAdminNotifications(filtered);
+        }
       }
       
-      calculateStats(usersData, auctions, deposits, adminParcels);
+      calculateStats(usersData, auctions, deposits, adminParcelsList);
       
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      Alert.alert('Erreur', 'Impossible de charger certaines données');
+      if (isMounted.current) {
+        Alert.alert('Erreur', 'Impossible de charger certaines données');
+      }
     }
   };
 
   const loadParcels = async () => {
     try {
-      // Fetch all parcels
       const result = await dispatch(fetchAllParcels()).unwrap();
-      setAllParcels(result || []);
+      const parcelsArray = result || [];
       
-      const filteredParcels = (result || []).filter(p => {
-        // If parcel has no adminId, show it (legacy parcels)
-        if (!p.adminId) {
-          console.log('Showing legacy parcel without adminId:', p.id);
-          return true;
-        }
-        // If parcel has adminId, only show if it matches current admin
-        return p.adminId === user?.id;
-      });
-      
-      setAdminParcels(filteredParcels);
-      
-      // Update stats with filtered parcels
-      calculateStats(users, auctions, deposits, filteredParcels);
-      
-      console.log('All parcels:', result);
-      console.log('Filtered parcels for admin:', filteredParcels);
-      console.log('Current admin ID:', user?.id);
+      if (isMounted.current) {
+        setAllParcels(parcelsArray);
+        
+        const filteredParcels = parcelsArray.filter(p => {
+          if (!p.adminId) return true;
+          return p.adminId === user?.id;
+        });
+        
+        setAdminParcels(filteredParcels);
+        calculateStats(users, auctions, deposits, filteredParcels);
+      }
       
     } catch (error) {
       console.error('Error loading parcels:', error);
     }
   };
-
-  const renderDepositFilters = () => (
-    <View style={styles.filterSection}>
-      <ThemedText style={styles.filterTitle}>Filtrer par enchère:</ThemedText>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <TouchableOpacity
-          style={[
-            styles.filterChip,
-            !selectedAuctionForDeposits && styles.filterChipActive
-          ]}
-          onPress={() => setSelectedAuctionForDeposits(null)}
-        >
-          <ThemedText style={[
-            styles.filterChipText,
-            !selectedAuctionForDeposits && styles.filterChipTextActive
-          ]}>
-            Toutes
-          </ThemedText>
-        </TouchableOpacity>
-        {Object.entries(auctionNames).map(([auctionId, name]) => (
-          <TouchableOpacity
-            key={auctionId}
-            style={[
-              styles.filterChip,
-              selectedAuctionForDeposits === auctionId && styles.filterChipActive
-            ]}
-            onPress={() => setSelectedAuctionForDeposits(auctionId)}
-          >
-            <ThemedText style={[
-              styles.filterChipText,
-              selectedAuctionForDeposits === auctionId && styles.filterChipTextActive
-            ]}>
-              {name.length > 20 ? name.substring(0, 20) + '...' : name}
-            </ThemedText>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
 
   const filterDepositsByDate = () => {
     if (!deposits.length) {
@@ -408,45 +384,60 @@ const AdminDashboard = () => {
       a.status === 'denied'
     ).length;
     
-    setAuctionCounts({
-      active: activeAuctions,
-      pending: pendingAuctions,
-      denied: deniedAuctions,
-      ended: endedAuctions
-    });
-    
-    // Fix parcels counts - ensure parcelsData is an array
     const parcelsArray = parcelsData || [];
     const pendingParcels = parcelsArray.filter(p => !p.delivred).length;
     const deliveredParcels = parcelsArray.filter(p => p.delivred).length;
     
     const totalDepositAmount = depositsData.reduce((sum, d) => sum + (d.amount || 0), 0);
     
-    setStats({
-      totalUsers: usersData.length,
-      totalAuctions: auctionsData.length,
-      totalDeposits: totalDepositAmount,
-      activeAuctions,
-      endedAuctions,
-      pendingAuctions,
-      deniedAuctions,
-      totalParcels: parcelsArray.length,
-      pendingParcels,
-      deliveredParcels
-    });
+    const auctionTotal = depositsData
+      .filter(d => d.type === 'AUCTION')
+      .reduce((sum, d) => sum + (d.amount || 0), 0);
+    const bidsTotal = depositsData
+      .filter(d => d.type === 'BIDS')
+      .reduce((sum, d) => sum + (d.amount || 0), 0);
+    
+    if (isMounted.current) {
+      setAuctionCounts({
+        active: activeAuctions,
+        pending: pendingAuctions,
+        denied: deniedAuctions,
+        ended: endedAuctions
+      });
+      
+      setDepositStats({
+        total: totalDepositAmount,
+        auction: auctionTotal,
+        bids: bidsTotal
+      });
+      
+      setStats({
+        totalUsers: usersData.length,
+        totalAuctions: auctionsData.length,
+        totalDeposits: totalDepositAmount,
+        activeAuctions,
+        endedAuctions,
+        pendingAuctions,
+        deniedAuctions,
+        totalParcels: parcelsArray.length,
+        pendingParcels,
+        deliveredParcels
+      });
+    }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDashboardData();
-    if (activeMenu === 'parcels') {
-      await loadParcels();
-    }
+    await refreshData();
     setRefreshing(false);
   };
 
   const getUserName = (userId) => {
-    return userNames[userId] || `ID: ${userId?.substring(0, 8)}...`;
+    return userNames[userId] || `Utilisateur #${userId?.substring(0, 8)}`;
+  };
+
+  const getAuctionTitle = (auctionId) => {
+    return auctionTitles[auctionId] || `Enchère #${auctionId?.substring(0, 8)}`;
   };
 
   const handleAuctionPress = async (auction) => {
@@ -467,6 +458,11 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleParcelPress = (parcel) => {
+    setSelectedParcelDetails(parcel);
+    setParcelDetailsModalVisible(true);
+  };
+
   const handleApproveAuction = async (auctionId) => {
     Alert.alert(
       'Approuver l\'enchère',
@@ -480,7 +476,7 @@ const AdminDashboard = () => {
               setProcessingAuctionId(auctionId);
               await dispatch(approveAuction({ auctionId, adminId: user.id })).unwrap();
               Alert.alert('Succès', 'Enchère approuvée avec succès');
-              await loadDashboardData();
+              await refreshData();
             } catch (error) {
               Alert.alert('Erreur', 'Échec de l\'approbation');
             } finally {
@@ -506,7 +502,7 @@ const AdminDashboard = () => {
               setProcessingAuctionId(auctionId);
               await dispatch(denyAuction({ auctionId, adminId: user.id })).unwrap();
               Alert.alert('Succès', 'Enchère refusée');
-              await loadDashboardData();
+              await refreshData();
             } catch (error) {
               Alert.alert('Erreur', 'Échec du refus');
             } finally {
@@ -681,58 +677,49 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleAssignTransporter = async (parcelId, transporterId, pickUpAdress, destinationAdress) => {
-    try {
-      setProcessingParcelId(parcelId);
-      
-      const parcelData = {
-        transporterId: transporterId,
-        pickUpAdress: pickUpAdress,           
-        destinationAdress: destinationAdress, 
-        adminId: user.id
-      };
-      
-      console.log('Sending parcel update with data:', JSON.stringify(parcelData, null, 2));
-      
-      const result = await dispatch(updateParcel({ 
-        id: parcelId, 
-        parcelData: parcelData
-      })).unwrap();
-      
-      console.log('Update successful:', result);
-      
-      Alert.alert('Succès', 'Transporteur assigné avec succès');
-      await loadParcels();
-      setAssignModalVisible(false);
-      setPickUpAdress('');
-      setDestinationAdress('');
-      setSelectedParcelForAssign(null);
-    } catch (error) {
-      console.error('Error assigning transporter:', error);
-      if (error.response) {
-        console.error('Error response data:', error.response.data);
-      }
-      Alert.alert('Erreur', 'Échec de l\'assignation');
-    } finally {
-      setProcessingParcelId(null);
+  const handleUpdateParcel = async () => {
+    if (!selectedParcelForAssign) return;
+    if (!pickUpAdress.trim() || !destinationAdress.trim()) {
+      Alert.alert('Erreur', 'Veuillez remplir toutes les adresses');
+      return;
     }
-  };
 
-  const handleDeliverParcel = async (parcelId) => {
     Alert.alert(
-      'Livraison',
-      'Confirmez-vous que ce colis a été livré ?',
+      'Confirmation',
+      'Voulez-vous modifier les informations de ce colis ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Confirmer',
           onPress: async () => {
             try {
-              setProcessingParcelId(parcelId);
-              await dispatch(deliverParcel(parcelId)).unwrap();
-              Alert.alert('Succès', 'Colis marqué comme livré');
+              setProcessingParcelId(selectedParcelForAssign.id);
+              
+              const parcelData = {
+                pickUpAdress: pickUpAdress,
+                destinationAdress: destinationAdress,
+                adminId: user.id
+              };
+              
+              if (selectedTransporterId) {
+                parcelData.transporterId = selectedTransporterId;
+              }
+              
+              await dispatch(updateParcel({ 
+                id: selectedParcelForAssign.id, 
+                parcelData: parcelData
+              })).unwrap();
+              
+              Alert.alert('Succès', 'Colis mis à jour avec succès');
+              setAssignModalVisible(false);
+              setPickUpAdress('');
+              setDestinationAdress('');
+              setSelectedParcelForAssign(null);
+              setSelectedTransporterId(null);
               await loadParcels();
+              await loadDashboardData();
             } catch (error) {
+              console.error('Error updating parcel:', error);
               Alert.alert('Erreur', 'Échec de la mise à jour');
             } finally {
               setProcessingParcelId(null);
@@ -741,6 +728,14 @@ const AdminDashboard = () => {
         }
       ]
     );
+  };
+
+  const handleEditParcel = (parcel) => {
+    setSelectedParcelForAssign(parcel);
+    setPickUpAdress(parcel.pickUpAdress || '');
+    setDestinationAdress(parcel.destinationAdress || '');
+    setSelectedTransporterId(parcel.transporterId || null);
+    setAssignModalVisible(true);
   };
 
   const formatCurrency = (amount) => {
@@ -1083,43 +1078,7 @@ const AdminDashboard = () => {
           </ThemedCard>
         )}
 
-        <View style={styles.depositStatsRow}>
-          <ThemedCard style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#fbbf24' + '20' }]}>
-              <Ionicons name="cash" size={24} color="#fbbf24" />
-            </View>
-            <View style={styles.statInfo}>
-              <ThemedText style={styles.statTitle}>Dépôts Total</ThemedText>
-              <ThemedText style={styles.statValue}>{formatCurrency(stats.totalDeposits)}</ThemedText>
-            </View>
-          </ThemedCard>
-        </View>
-
-        <View style={styles.depositStatsRow}>
-          <ThemedCard style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#3b82f6' + '20' }]}>
-              <Ionicons name="hammer" size={24} color="#3b82f6" />
-            </View>
-            <View style={styles.statInfo}>
-              <ThemedText style={styles.statTitle}>Dépôts Enchères</ThemedText>
-              <ThemedText style={styles.statValue}>{formatCurrency(depositStats.auction)}</ThemedText>
-            </View>
-          </ThemedCard>
-
-          <ThemedCard style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#f59e0b' + '20' }]}>
-              <Ionicons name="people" size={24} color="#f59e0b" />
-            </View>
-            <View style={styles.statInfo}>
-              <ThemedText style={styles.statTitle}>Dépôts Enchères</ThemedText>
-              <ThemedText style={styles.statValue}>{formatCurrency(depositStats.bids)}</ThemedText>
-            </View>
-          </ThemedCard>
-        </View>
-
-        {renderDateFilter()}
-        {renderDepositChart()}
-
+        {/* PARCELS CARDS */}
         <View style={styles.statsGrid}>
           <ThemedCard style={styles.statCard}>
             <View style={[
@@ -1172,172 +1131,256 @@ const AdminDashboard = () => {
             </View>
           </ThemedCard>
         </View>
+
+        {/* DEPOSITS CARDS */}
+        <View style={styles.depositStatsRow}>
+          <ThemedCard style={styles.statCard}>
+            <View style={[styles.statIconContainer, { backgroundColor: '#fbbf24' + '20' }]}>
+              <Ionicons name="cash" size={24} color="#fbbf24" />
+            </View>
+            <View style={styles.statInfo}>
+              <ThemedText style={styles.statTitle}>Dépôts Total</ThemedText>
+              <ThemedText style={styles.statValue}>{formatCurrency(stats.totalDeposits)}</ThemedText>
+            </View>
+          </ThemedCard>
+        </View>
+
+        <View style={styles.depositStatsRow}>
+          <ThemedCard style={styles.statCard}>
+            <View style={[styles.statIconContainer, { backgroundColor: '#3b82f6' + '20' }]}>
+              <Ionicons name="hammer" size={24} color="#3b82f6" />
+            </View>
+            <View style={styles.statInfo}>
+              <ThemedText style={styles.statTitle}>Dépôts Enchères</ThemedText>
+              <ThemedText style={styles.statValue}>{formatCurrency(depositStats.auction)}</ThemedText>
+            </View>
+          </ThemedCard>
+
+          <ThemedCard style={styles.statCard}>
+            <View style={[styles.statIconContainer, { backgroundColor: '#f59e0b' + '20' }]}>
+              <Ionicons name="people" size={24} color="#f59e0b" />
+            </View>
+            <View style={styles.statInfo}>
+              <ThemedText style={styles.statTitle}>Dépôts Enchères</ThemedText>
+              <ThemedText style={styles.statValue}>{formatCurrency(depositStats.bids)}</ThemedText>
+            </View>
+          </ThemedCard>
+        </View>
+
+        {renderDateFilter()}
+        {renderDepositChart()}
       </>
     );
   };
 
-  const renderUsersList = () => (
-    <ThemedCard style={styles.listCard}>
-      <View style={styles.listHeader}>
-        <ThemedText style={styles.listTitle}>
-          Gestion des utilisateurs
-        </ThemedText>
-        <ThemedText style={styles.listCount}>
-          {users.length} utilisateurs
-        </ThemedText>
-      </View>
-
-      <View style={styles.tableHeader}>
-        <ThemedText style={[styles.headerCell, { flex: 2 }]}>
-          Utilisateur
-        </ThemedText>
-        <ThemedText style={[styles.headerCell, { flex: 1 }]}>
-          Rôle
-        </ThemedText>
-        <ThemedText style={[styles.headerCell, { flex: 1 }]}>
-          Statut
-        </ThemedText>
-        <ThemedText style={[styles.headerCell, { flex: 2 }]}>
-          Actions
-        </ThemedText>
-      </View>
-
-      <ScrollView style={styles.tableBody}>
-        {users.map((userItem, index) => (
-          <View key={userItem.id} style={[
-            styles.tableRow,
-            index % 2 === 0 && { backgroundColor: theme.uiBackground + '40' }
-          ]}>
-            <View style={{ flex: 2 }}>
-              <ThemedText style={styles.userName}>
-                {userItem.firstname} {userItem.lastname}
-              </ThemedText>
-              <ThemedText style={styles.userEmail}>
-                {userItem.email}
-              </ThemedText>
-            </View>
-            
-            <View style={{ flex: 1 }}>
-              <View style={[
-                styles.roleBadge,
-                { backgroundColor: 
-                  userItem.role === 'ADMIN' ? Colors.primary : 
-                  userItem.role === 'Transporter' ? '#3b82f6' : '#666' 
-                }
+  const renderUsersList = () => {
+    const filteredUsers = users.filter(userItem => {
+      if (userFilter === 'all') return true;
+      if (userFilter === 'users') return userItem.role !== 'ADMIN' && userItem.role !== 'Transporter';
+      if (userFilter === 'admins') return userItem.role === 'ADMIN';
+      if (userFilter === 'transporters') return userItem.role === 'Transporter';
+      if (userFilter === 'blocked') return userItem.status === 'Blocked';
+      return true;
+    });
+    
+    const blockedUsers = users.filter(u => u.status === 'Blocked');
+    
+    return (
+      <View>
+        <View style={styles.userFilterTabs}>
+          {['all', 'users', 'admins', 'transporters', 'blocked'].map((filter) => (
+            <TouchableOpacity
+              key={filter}
+              style={[
+                styles.userFilterTab,
+                userFilter === filter && styles.userFilterTabActive
+              ]}
+              onPress={() => setUserFilter(filter)}
+            >
+              <ThemedText style={[
+                styles.userFilterTabText,
+                userFilter === filter && styles.userFilterTabTextActive
               ]}>
-                <ThemedText style={styles.roleText}>
-                  {userItem.role}
-                </ThemedText>
-              </View>
-            </View>
-            
-            <View style={{ flex: 1 }}>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: 
-                  userItem.status === 'Activated' ? '#4ade80' : 
-                  userItem.status === 'Blocked' ? '#ef4444' : '#fbbf24' 
-                }
-              ]}>
-                <ThemedText style={styles.statusText}>
-                  {userItem.status}
-                </ThemedText>
-              </View>
-            </View>
-
-            <View style={{ 
-              flex: 2, 
-              flexDirection: 'row', 
-              gap: 8, 
-              flexWrap: 'wrap' 
-            }}>
-              {userItem.status !== 'Blocked' ? (
-                <TouchableOpacity
-                  onPress={() => handleBlockUser(userItem.id)}
-                  disabled={processingUserId === userItem.id || blockLoading}
-                  style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
-                >
-                  {(processingUserId === userItem.id && blockLoading) ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="lock-closed" size={16} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => handleUnblockUser(userItem.id)}
-                  disabled={processingUserId === userItem.id || unblockLoading}
-                  style={[styles.actionButton, { backgroundColor: '#4ade80' }]}
-                >
-                  {(processingUserId === userItem.id && unblockLoading) ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="lock-open" size={16} color="#fff" />
-                  )}
-                </TouchableOpacity>
+                {filter === 'all' ? 'Tous' :
+                 filter === 'users' ? 'Utilisateurs' :
+                 filter === 'admins' ? 'Admins' :
+                 filter === 'transporters' ? 'Transporteurs' : 'Bloqués'}
+              </ThemedText>
+              {filter === 'blocked' && blockedUsers.length > 0 && (
+                <View style={styles.blockedBadge}>
+                  <ThemedText style={styles.blockedBadgeText}>
+                    {blockedUsers.length}
+                  </ThemedText>
+                </View>
               )}
-              
-              {userItem.role !== 'ADMIN' && userItem.role !== 'Transporter' && (
-                <TouchableOpacity
-                  onPress={() => handleRoleChange(userItem.id, userItem.role)}
-                  disabled={processingUserId === userItem.id}
-                  style={[styles.actionButton, { backgroundColor: Colors.primary }]}
-                >
-                  {processingUserId === userItem.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="shield" size={16} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {userItem.role === 'ADMIN' && (
-                <TouchableOpacity
-                  onPress={() => handleRoleChange(userItem.id, userItem.role)}
-                  disabled={processingUserId === userItem.id}
-                  style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
-                >
-                  {processingUserId === userItem.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="person" size={16} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {userItem.role !== 'Transporter' && userItem.role !== 'ADMIN' && (
-                <TouchableOpacity
-                  onPress={() => handleMakeTransporter(userItem.id)}
-                  disabled={processingUserId === userItem.id}
-                  style={[styles.actionButton, { backgroundColor: '#3b82f6' }]}
-                >
-                  {processingUserId === userItem.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="car" size={16} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {userItem.role === 'Transporter' && (
-                <TouchableOpacity
-                  onPress={() => handleRemoveTransporter(userItem.id)}
-                  disabled={processingUserId === userItem.id}
-                  style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
-                >
-                  {processingUserId === userItem.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="person" size={16} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+        
+        <ThemedCard style={styles.listCard}>
+          <View style={styles.listHeader}>
+            <ThemedText style={styles.listTitle}>
+              Gestion des utilisateurs
+            </ThemedText>
+            <ThemedText style={styles.listCount}>
+              {filteredUsers.length} {userFilter === 'blocked' ? 'bloqués' : 'utilisateurs'}
+            </ThemedText>
           </View>
-        ))}
-      </ScrollView>
-    </ThemedCard>
-  );
+
+          <View style={styles.tableHeader}>
+            <ThemedText style={[styles.headerCell, { flex: 2 }]}>
+              Utilisateur
+            </ThemedText>
+            <ThemedText style={[styles.headerCell, { flex: 1 }]}>
+              Rôle
+            </ThemedText>
+            <ThemedText style={[styles.headerCell, { flex: 1 }]}>
+              Statut
+            </ThemedText>
+            <ThemedText style={[styles.headerCell, { flex: 2 }]}>
+              Actions
+            </ThemedText>
+          </View>
+
+          <ScrollView style={styles.tableBody}>
+            {filteredUsers.map((userItem, index) => (
+              <View key={userItem.id} style={[
+                styles.tableRow,
+                index % 2 === 0 && { backgroundColor: theme.uiBackground + '40' },
+                userItem.status === 'Blocked' && styles.blockedRow
+              ]}>
+                <View style={{ flex: 2 }}>
+                  <ThemedText style={styles.userName}>
+                    {userItem.firstname} {userItem.lastname}
+                  </ThemedText>
+                  <ThemedText style={styles.userEmail}>
+                    {userItem.email}
+                  </ThemedText>
+                </View>
+                
+                <View style={{ flex: 1 }}>
+                  <View style={[
+                    styles.roleBadge,
+                    { backgroundColor: 
+                      userItem.role === 'ADMIN' ? Colors.primary : 
+                      userItem.role === 'Transporter' ? '#3b82f6' : '#666' 
+                    }
+                  ]}>
+                    <ThemedText style={styles.roleText}>
+                      {userItem.role === 'ADMIN' ? 'Admin' : userItem.role}
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                <View style={{ flex: 1 }}>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: 
+                      userItem.status === 'Activated' ? '#4ade80' : 
+                      userItem.status === 'Blocked' ? '#ef4444' : '#fbbf24' 
+                    }
+                  ]}>
+                    <ThemedText style={styles.statusText}>
+                      {userItem.status === 'Activated' ? 'Actif' : userItem.status}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <View style={{ 
+                  flex: 2, 
+                  flexDirection: 'row', 
+                  gap: 8, 
+                  flexWrap: 'wrap' 
+                }}>
+                  {userItem.status !== 'Blocked' ? (
+                    <TouchableOpacity
+                      onPress={() => handleBlockUser(userItem.id)}
+                      disabled={processingUserId === userItem.id || blockLoading}
+                      style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
+                    >
+                      {(processingUserId === userItem.id && blockLoading) ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="lock-closed" size={16} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => handleUnblockUser(userItem.id)}
+                      disabled={processingUserId === userItem.id || unblockLoading}
+                      style={[styles.actionButton, { backgroundColor: '#4ade80' }]}
+                    >
+                      {(processingUserId === userItem.id && unblockLoading) ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="lock-open" size={16} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  
+                  {userItem.role !== 'ADMIN' && userItem.role !== 'Transporter' && userItem.status !== 'Blocked' && (
+                    <TouchableOpacity
+                      onPress={() => handleRoleChange(userItem.id, userItem.role)}
+                      disabled={processingUserId === userItem.id}
+                      style={[styles.actionButton, { backgroundColor: Colors.primary }]}
+                    >
+                      {processingUserId === userItem.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="shield" size={16} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+
+                  {userItem.role === 'ADMIN' && (
+                    <TouchableOpacity
+                      onPress={() => handleRoleChange(userItem.id, userItem.role)}
+                      disabled={processingUserId === userItem.id}
+                      style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
+                    >
+                      {processingUserId === userItem.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="person" size={16} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+
+                  {userItem.role !== 'Transporter' && userItem.role !== 'ADMIN' && userItem.status !== 'Blocked' && (
+                    <TouchableOpacity
+                      onPress={() => handleMakeTransporter(userItem.id)}
+                      disabled={processingUserId === userItem.id}
+                      style={[styles.actionButton, { backgroundColor: '#3b82f6' }]}
+                    >
+                      {processingUserId === userItem.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="car" size={16} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+
+                  {userItem.role === 'Transporter' && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveTransporter(userItem.id)}
+                      disabled={processingUserId === userItem.id}
+                      style={[styles.actionButton, { backgroundColor: '#ef4444' }]}
+                    >
+                      {processingUserId === userItem.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="person" size={16} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </ThemedCard>
+      </View>
+    );
+  };
 
   const renderAuctionsList = () => {
     const filteredAuctions = auctions.filter(auction => {
@@ -1382,101 +1425,104 @@ const AdminDashboard = () => {
           ))}
         </View>
 
-        {filteredAuctions.map(auction => (
-          <TouchableOpacity 
-            key={auction.id} 
-            onPress={() => handleAuctionPress(auction)}
-          >
-            <View style={styles.auctionItemCard}>
-              <View style={styles.auctionItemHeader}>
-                <View style={styles.auctionTitleContainer}>
-                  <Ionicons name="hammer" size={20} color={Colors.primary} />
-                  <ThemedText style={styles.auctionItemTitle}>
-                    {auction.title}
-                  </ThemedText>
-                </View>
-                <View style={[
-                  styles.statusBadgeSmall,
-                  { backgroundColor: 
-                    auction.status === 'active' ? '#4ade80' :
-                    auction.status === 'pending' ? '#fbbf24' :
-                    auction.status === 'denied' ? '#ef4444' : 
-                    auction.status === 'ended' ? '#9ca3af' : '#666' 
-                  }
-                ]}>
-                  <ThemedText style={styles.statusBadgeTextSmall}>
-                    {auction.status === 'active' ? 'Active' :
-                     auction.status === 'pending' ? 'En attente' :
-                     auction.status === 'denied' ? 'Refusée' :
-                     auction.status === 'ended' ? 'Terminée' : auction.status}
-                  </ThemedText>
-                </View>
-              </View>
-              
-              <View style={styles.auctionItemDetails}>
-                <View style={styles.detailChip}>
-                  <Ionicons name="person-outline" size={14} color="#666" />
-                  <ThemedText style={styles.detailChipText}>
-                    {getUserName(auction.sellerId)}
-                  </ThemedText>
-                </View>
-                
-                <View style={styles.detailChip}>
-                  <Ionicons name="cash-outline" size={14} color="#666" />
-                  <ThemedText style={styles.detailChipText}>
-                    {auction.startingPrice} TND
-                  </ThemedText>
+        {filteredAuctions.map(auction => {
+          const getStatusStyle = () => {
+            if (auction.status === 'active') return styles.statusActive;
+            if (auction.status === 'pending') return styles.statusPending;
+            if (auction.status === 'denied') return styles.statusDenied;
+            if (auction.status === 'ended') return styles.statusEnded;
+            return styles.statusDefault;
+          };
+          
+          const getStatusText = () => {
+            if (auction.status === 'active') return 'Active';
+            if (auction.status === 'pending') return 'En attente';
+            if (auction.status === 'denied') return 'Refusée';
+            if (auction.status === 'ended') return 'Terminée';
+            return auction.status;
+          };
+          
+          return (
+            <TouchableOpacity 
+              key={auction.id} 
+              onPress={() => handleAuctionPress(auction)}
+              style={styles.auctionItemCard}
+            >
+              <View style={styles.auctionItemContent}>
+                <View style={styles.auctionItemHeader}>
+                  <View style={styles.auctionTitleContainer}>
+                    <Ionicons name="hammer" size={20} color={Colors.primary} />
+                    <ThemedText style={styles.auctionItemTitle}>
+                      {auction.title}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.auctionStatusBadge, getStatusStyle()]}>
+                    <ThemedText style={styles.auctionStatusText}>
+                      {getStatusText()}
+                    </ThemedText>
+                  </View>
                 </View>
                 
-                <View style={styles.detailChip}>
-                  <Ionicons name="people-outline" size={14} color="#666" />
-                  <ThemedText style={styles.detailChipText}>
-                    {auction.bidders ? Object.keys(auction.bidders).length : 0} 
-                    enchérisseurs
-                  </ThemedText>
-                </View>
-              </View>
-
-              {auction.status === 'pending' && (
-                <View style={styles.adminActions}>
-                  <TouchableOpacity
-                    style={[styles.actionChip, styles.approveChip]}
-                    onPress={() => handleApproveAuction(auction.id)}
-                    disabled={processingAuctionId === auction.id}
-                  >
-                    {processingAuctionId === auction.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                        <ThemedText style={styles.actionChipText}>
-                          Approuver
-                        </ThemedText>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                <View style={styles.auctionItemDetails}>
+                  <View style={styles.detailChip}>
+                    <Ionicons name="person-outline" size={14} color="#666" />
+                    <ThemedText style={styles.detailChipText}>
+                      {getUserName(auction.sellerId)}
+                    </ThemedText>
+                  </View>
                   
-                  <TouchableOpacity
-                    style={[styles.actionChip, styles.denyChip]}
-                    onPress={() => handleDenyAuction(auction.id)}
-                    disabled={processingAuctionId === auction.id}
-                  >
-                    {processingAuctionId === auction.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="close" size={16} color="#fff" />
-                        <ThemedText style={styles.actionChipText}>
-                          Refuser
-                        </ThemedText>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                  <View style={styles.detailChip}>
+                    <Ionicons name="cash-outline" size={14} color="#666" />
+                    <ThemedText style={styles.detailChipText}>
+                      {auction.startingPrice} TND
+                    </ThemedText>
+                  </View>
+                  
+                  <View style={styles.detailChip}>
+                    <Ionicons name="people-outline" size={14} color="#666" />
+                    <ThemedText style={styles.detailChipText}>
+                      {auction.bidders ? Object.keys(auction.bidders).length : 0} enchérisseurs
+                    </ThemedText>
+                  </View>
                 </View>
-              )}
-            </View>
-          </TouchableOpacity>
-        ))}
+
+                {auction.status === 'pending' && (
+                  <View style={styles.adminActions}>
+                    <TouchableOpacity
+                      style={[styles.actionChip, styles.approveChip]}
+                      onPress={() => handleApproveAuction(auction.id)}
+                      disabled={processingAuctionId === auction.id}
+                    >
+                      {processingAuctionId === auction.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                          <ThemedText style={styles.actionChipText}>Approuver</ThemedText>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.actionChip, styles.denyChip]}
+                      onPress={() => handleDenyAuction(auction.id)}
+                      disabled={processingAuctionId === auction.id}
+                    >
+                      {processingAuctionId === auction.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="close" size={16} color="#fff" />
+                          <ThemedText style={styles.actionChipText}>Refuser</ThemedText>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -1522,118 +1568,121 @@ const AdminDashboard = () => {
         </View>
 
         {filteredParcels.map(parcel => (
-          <View key={parcel.id} style={styles.parcelCard}>
-            <View style={styles.parcelHeader}>
-              <View style={styles.parcelInfo}>
-                <Ionicons name="cube" size={20} color={Colors.primary} />
-                <ThemedText style={styles.parcelId}>
-                  Colis #{parcel.id.substring(0, 8)}
-                </ThemedText>
-              </View>
-              <View style={[
-                styles.parcelStatus,
-                { backgroundColor: 
-                  parcel.delivred ? '#4ade80' : 
-                  parcel.transporterId ? '#3b82f6' : '#fbbf24' 
-                }
-              ]}>
-                <ThemedText style={styles.parcelStatusText}>
-                  {parcel.delivred ? 'Livré' : 
-                   parcel.transporterId ? 'En cours' : 'En attente'}
-                </ThemedText>
-              </View>
-            </View>
-            
-            <View style={styles.parcelDetails}>
-              <View style={styles.parcelDetailRow}>
-                <Ionicons name="hammer" size={14} color="#666" />
-                <ThemedText style={styles.parcelDetailText}>
-                  Enchère: {getUserName(parcel.auctionId)}
-                </ThemedText>
+          <TouchableOpacity 
+            key={parcel.id} 
+            onPress={() => handleParcelPress(parcel)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.parcelCard}>
+              <View style={styles.parcelHeader}>
+                <View style={styles.parcelInfo}>
+                  <Ionicons name="cube" size={20} color={Colors.primary} />
+                  <ThemedText style={styles.parcelId}>
+                    Colis #{parcel.id.substring(0, 8)}
+                  </ThemedText>
+                </View>
+                <View style={[
+                  styles.parcelStatus,
+                  { backgroundColor: 
+                    parcel.delivred ? '#4ade80' : 
+                    parcel.transporterId ? '#3b82f6' : '#fbbf24' 
+                  }
+                ]}>
+                  <ThemedText style={styles.parcelStatusText}>
+                    {parcel.delivred ? 'Livré' : 
+                     parcel.transporterId ? 'En cours' : 'En attente'}
+                  </ThemedText>
+                </View>
               </View>
               
-              <View style={styles.parcelDetailRow}>
-                <Ionicons name="person" size={14} color="#666" />
-                <ThemedText style={styles.parcelDetailText}>
-                  Acheteur: {getUserName(parcel.buyerId)}
-                </ThemedText>
-              </View>
-              
-              <View style={styles.parcelDetailRow}>
-                <Ionicons name="car" size={14} color="#666" />
-                <ThemedText style={styles.parcelDetailText}>
-                  Transporteur: {parcel.transporterId ? 
-                    getUserName(parcel.transporterId) : 'Non assigné'}
-                </ThemedText>
-              </View>
-            </View>
-
-            {!parcel.delivred && (
-              <View style={styles.parcelActions}>
-                {!parcel.transporterId && (
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.assignButton]}
-                    onPress={() => {
-                      setSelectedParcelForAssign(parcel);
-                      setAssignModalVisible(true);
-                    }}
-                    disabled={processingParcelId === parcel.id}
-                  >
-                    {processingParcelId === parcel.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="car" size={16} color="#fff" />
-                        <ThemedText style={styles.actionButtonText}>
-                          Assigner
-                        </ThemedText>
-                      </>
-                    )}
-                  </TouchableOpacity>
+              <View style={styles.parcelDetails}>
+                <View style={styles.parcelDetailRow}>
+                  <Ionicons name="hammer" size={14} color="#666" />
+                  <ThemedText style={styles.parcelDetailText}>
+                    Enchère: {getAuctionTitle(parcel.auctionId)}
+                  </ThemedText>
+                </View>
+                
+                <View style={styles.parcelDetailRow}>
+                  <Ionicons name="person" size={14} color="#666" />
+                  <ThemedText style={styles.parcelDetailText}>
+                    Acheteur: {getUserName(parcel.buyerId)}
+                  </ThemedText>
+                </View>
+                
+                {parcel.auctionId && (
+                  <View style={styles.parcelDetailRow}>
+                    <Ionicons name="storefront" size={14} color="#666" />
+                    <ThemedText style={styles.parcelDetailText}>
+                      Vendeur: {userNames[auctions.find(a => a.id === parcel.auctionId)?.sellerId] || 'Chargement...'}
+                    </ThemedText>
+                  </View>
                 )}
                 
-                {parcel.transporterId && (
+                <View style={styles.parcelDetailRow}>
+                  <Ionicons name="car" size={14} color="#666" />
+                  <ThemedText style={styles.parcelDetailText}>
+                    Transporteur: {parcel.transporterId ? 
+                      getUserName(parcel.transporterId) : 'Non assigné'}
+                  </ThemedText>
+                </View>
+                
+                {parcel.pickUpAdress && (
+                  <View style={styles.parcelDetailRow}>
+                    <Ionicons name="location" size={14} color="#666" />
+                    <ThemedText style={styles.parcelDetailText} numberOfLines={2}>
+                      Collecte: {parcel.pickUpAdress}
+                    </ThemedText>
+                  </View>
+                )}
+                
+                {parcel.destinationAdress && (
+                  <View style={styles.parcelDetailRow}>
+                    <Ionicons name="navigate" size={14} color="#666" />
+                    <ThemedText style={styles.parcelDetailText} numberOfLines={2}>
+                      Destination: {parcel.destinationAdress}
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+
+              {!parcel.delivred && (
+                <View style={styles.parcelActions}>
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.deliverButton]}
-                    onPress={() => handleDeliverParcel(parcel.id)}
+                    style={[styles.fullWidthButton, styles.editButton]}
+                    onPress={() => handleEditParcel(parcel)}
                     disabled={processingParcelId === parcel.id}
                   >
-                    {processingParcelId === parcel.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                        <ThemedText style={styles.actionButtonText}>
-                          Marquer livré
-                        </ThemedText>
-                      </>
-                    )}
+                    <Ionicons name="create-outline" size={16} color="#fff" />
+                    <ThemedText style={styles.fullWidthButtonText}>
+                      Modifier colis
+                    </ThemedText>
                   </TouchableOpacity>
-                )}
-              </View>
-            )}
+                </View>
+              )}
 
-            {parcel.delivred && parcel.isValid !== null && (
-              <View style={styles.qualityInfo}>
-                <Ionicons 
-                  name={parcel.isValid ? "checkmark-circle" : "alert-circle"} 
-                  size={16} 
-                  color={parcel.isValid ? "#4ade80" : "#ef4444"} 
-                />
-                <ThemedText style={[
-                  styles.qualityText,
-                  { color: parcel.isValid ? "#4ade80" : "#ef4444" }
-                ]}>
-                  {parcel.isValid ? 'Produit conforme' : 'Produit non conforme'}
-                </ThemedText>
-                {!parcel.isValid && parcel.unvalidDescription && (
-                  <ThemedText style={styles.qualityDescription}>
-                    Motif: {parcel.unvalidDescription}
+              {parcel.delivred && parcel.isValid !== null && (
+                <View style={styles.qualityInfo}>
+                  <Ionicons 
+                    name={parcel.isValid ? "checkmark-circle" : "alert-circle"} 
+                    size={16} 
+                    color={parcel.isValid ? "#4ade80" : "#ef4444"} 
+                  />
+                  <ThemedText style={[
+                    styles.qualityText,
+                    { color: parcel.isValid ? "#4ade80" : "#ef4444" }
+                  ]}>
+                    {parcel.isValid ? 'Produit conforme' : 'Produit non conforme'}
                   </ThemedText>
-                )}
-              </View>
-            )}
-          </View>
+                  {!parcel.isValid && parcel.unvalidDescription && (
+                    <ThemedText style={styles.qualityDescription}>
+                      Motif: {parcel.unvalidDescription}
+                    </ThemedText>
+                  )}
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         ))}
       </View>
     );
@@ -1685,7 +1734,7 @@ const AdminDashboard = () => {
                 }
               ]}>
                 <ThemedText style={styles.statusText}>
-                  {transporter.status}
+                  {transporter.status === 'Activated' ? 'Actif' : 'Inactif'}
                 </ThemedText>
               </View>
             </View>
@@ -1712,111 +1761,158 @@ const AdminDashboard = () => {
   const renderNotificationsList = () => {
     const unreadNotifications = adminNotifications.filter(n => !n.read);
     
+    const getNotificationIcon = (type) => {
+      switch (type) {
+        case 'AUCTION_PENDING':
+          return 'hammer';
+        case 'PARCEL_INVALID':
+          return 'alert-circle';
+        default:
+          return 'notifications';
+      }
+    };
+
+    const getNotificationColor = (type) => {
+      switch (type) {
+        case 'AUCTION_PENDING':
+          return '#fbbf24';
+        case 'PARCEL_INVALID':
+          return '#ef4444';
+        default:
+          return Colors.primary;
+      }
+    };
+
+    const formatTime = (dateString) => {
+      try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'À l\'instant';
+        if (diffMins < 60) return `Il y a ${diffMins} min`;
+        if (diffHours < 24) return `Il y a ${diffHours} h`;
+        if (diffDays < 7) return `Il y a ${diffDays} j`;
+        return date.toLocaleDateString('fr-FR');
+      } catch (error) {
+        return 'Date inconnue';
+      }
+    };
+
     return (
-      <ThemedCard style={styles.listCard}>
-        <View style={styles.listHeader}>
-          <ThemedText style={styles.listTitle}>
+      <View style={styles.notificationsContainer}>
+        <View style={styles.notificationsHeader}>
+          <ThemedText style={styles.notificationsTitle}>
             Notifications
           </ThemedText>
-          <View style={styles.listHeaderRight}>
-            {unreadNotifications.length > 0 && !notificationSelectionMode && (
-              <TouchableOpacity onPress={() => setNotificationSelectionMode(true)}>
+          {unreadNotifications.length > 0 && !notificationSelectionMode && (
+            <TouchableOpacity onPress={() => setNotificationSelectionMode(true)}>
+              <ThemedText style={styles.selectText}>
+                Sélectionner
+              </ThemedText>
+            </TouchableOpacity>
+          )}
+          {notificationSelectionMode && (
+            <View style={styles.selectionActions}>
+              <TouchableOpacity onPress={handleSelectAllNotifications}>
                 <ThemedText style={styles.selectText}>
-                  Sélectionner
+                  {selectedNotificationIds.length === adminNotifications.length 
+                    ? 'Tout désélectionner' 
+                    : 'Tout sélectionner'}
                 </ThemedText>
               </TouchableOpacity>
-            )}
-            {notificationSelectionMode && (
-              <View style={styles.selectionActions}>
-                <TouchableOpacity onPress={handleSelectAllNotifications}>
-                  <ThemedText style={styles.selectText}>
-                    {selectedNotificationIds.length === adminNotifications.length 
-                      ? 'Tout désélectionner' 
-                      : 'Tout sélectionner'}
+              {selectedNotificationIds.length > 0 && (
+                <TouchableOpacity onPress={handleMarkSelectedAsRead}>
+                  <ThemedText style={[styles.selectText, { color: Colors.primary }]}>
+                    Marquer lues ({selectedNotificationIds.length})
                   </ThemedText>
                 </TouchableOpacity>
-                {selectedNotificationIds.length > 0 && (
-                  <TouchableOpacity onPress={handleMarkSelectedAsRead}>
-                    <ThemedText style={[styles.selectText, { color: Colors.primary }]}>
-                      Marquer lues ({selectedNotificationIds.length})
-                    </ThemedText>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => {
-                  setNotificationSelectionMode(false);
-                  setSelectedNotificationIds([]);
-                }}>
-                  <ThemedText style={styles.selectText}>
-                    Annuler
-                  </ThemedText>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+              )}
+              <TouchableOpacity onPress={() => {
+                setNotificationSelectionMode(false);
+                setSelectedNotificationIds([]);
+              }}>
+                <ThemedText style={styles.selectText}>
+                  Annuler
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        <ScrollView style={styles.tableBody}>
+        <ScrollView style={styles.notificationsList}>
           {adminNotifications.length === 0 ? (
-            <View style={styles.noNotificationsContainer}>
+            <View style={styles.emptyNotificationsContainer}>
               <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
-              <ThemedText style={styles.noNotificationsText}>
+              <ThemedText style={styles.emptyNotificationsText}>
                 Aucune notification
               </ThemedText>
             </View>
           ) : (
-            adminNotifications.map((notification, index) => (
+            adminNotifications.map((notification) => (
               <TouchableOpacity
                 key={notification.id}
                 style={[
-                  styles.notificationRow,
-                  !notification.read && styles.unreadNotificationRow,
+                  styles.notificationItem,
+                  !notification.read && styles.unreadNotificationItem,
                   notificationSelectionMode && 
                     selectedNotificationIds.includes(notification.id) && 
-                    styles.selectedNotificationRow
+                    styles.selectedNotificationItem
                 ]}
                 onPress={() => handleNotificationPress(notification)}
                 onLongPress={() => handleLongPressNotification(notification.id)}
                 delayLongPress={300}
               >
-                <View style={styles.notificationIcon}>
-                  {notification.type === 'AUCTION_PENDING' ? (
-                    <Ionicons name="hammer" size={24} color="#fbbf24" />
-                  ) : (
-                    <Ionicons name="alert-circle" size={24} color="#ef4444" />
+                <View style={styles.notificationItemContent}>
+                  <View style={[
+                    styles.notificationIconContainer,
+                    { backgroundColor: getNotificationColor(notification.type) + '20' }
+                  ]}>
+                    <Ionicons 
+                      name={getNotificationIcon(notification.type)} 
+                      size={22} 
+                      color={getNotificationColor(notification.type)} 
+                    />
+                  </View>
+                  
+                  <View style={styles.notificationTextContainer}>
+                    <ThemedText style={[
+                      styles.notificationMessage,
+                      !notification.read && styles.unreadNotificationMessage
+                    ]}>
+                      {notification.message}
+                    </ThemedText>
+                    <ThemedText style={styles.notificationTime}>
+                      {formatTime(notification.createdAt)}
+                    </ThemedText>
+                  </View>
+
+                  {!notification.read && !notificationSelectionMode && (
+                    <View style={styles.unreadDot} />
+                  )}
+
+                  {notificationSelectionMode && (
+                    <Ionicons
+                      name={selectedNotificationIds.includes(notification.id) 
+                        ? 'checkbox' : 'square-outline'}
+                      size={22}
+                      color={selectedNotificationIds.includes(notification.id) 
+                        ? Colors.primary : '#ccc'}
+                    />
                   )}
                 </View>
-                <View style={styles.notificationContent}>
-                  <ThemedText style={[
-                    styles.notificationMessage,
-                    !notification.read && styles.unreadNotificationMessage
-                  ]}>
-                    {notification.message}
-                  </ThemedText>
-                  <ThemedText style={styles.notificationDate}>
-                    {new Date(notification.createdAt).toLocaleString()}
-                  </ThemedText>
-                </View>
-                {!notification.read && !notificationSelectionMode && 
-                  <View style={styles.unreadDot} />
-                }
-                {notificationSelectionMode && (
-                  <Ionicons
-                    name={selectedNotificationIds.includes(notification.id) 
-                      ? 'checkbox' : 'square-outline'}
-                    size={22}
-                    color={selectedNotificationIds.includes(notification.id) 
-                      ? Colors.primary : '#ccc'}
-                  />
-                )}
               </TouchableOpacity>
             ))
           )}
         </ScrollView>
-      </ThemedCard>
+      </View>
     );
   };
 
-  const renderAssignModal = () => (
+  const renderEditParcelModal = () => (
     <Modal
       visible={assignModalVisible}
       transparent
@@ -1825,13 +1921,15 @@ const AdminDashboard = () => {
         setAssignModalVisible(false);
         setPickUpAdress('');
         setDestinationAdress('');
+        setSelectedParcelForAssign(null);
+        setSelectedTransporterId(null);
       }}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, styles.assignModalContent]}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
-              Assigner un transporteur
+              Modifier le colis
             </ThemedText>
             <TouchableOpacity onPress={() => setAssignModalVisible(false)}>
               <Ionicons name="close" size={24} color="#666" />
@@ -1839,69 +1937,205 @@ const AdminDashboard = () => {
           </View>
 
           <ScrollView style={styles.modalList}>
-            <ThemedText style={styles.modalLabel}>Adresse de collecte:</ThemedText>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Entrez l'adresse de collecte"
-              value={pickUpAdress}
-              onChangeText={setPickUpAdress}
-              multiline
-              numberOfLines={2}
-            />
-            
-            <ThemedText style={styles.modalLabel}>Adresse de destination:</ThemedText>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Entrez l'adresse de destination"
-              value={destinationAdress}
-              onChangeText={setDestinationAdress}
-              multiline
-              numberOfLines={2}
-            />
-            
-            <ThemedText style={styles.modalLabel}>Sélectionnez un transporteur:</ThemedText>
-            {transporters.length === 0 ? (
-              <ThemedText style={styles.noTransportersText}>
-                Aucun transporteur disponible
-              </ThemedText>
-            ) : (
-              transporters.map(transporter => (
+            <View style={styles.assignForm}>
+              <ThemedText style={styles.modalLabel}>Adresse de collecte:</ThemedText>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Entrez l'adresse de collecte"
+                value={pickUpAdress}
+                onChangeText={setPickUpAdress}
+                multiline
+                numberOfLines={2}
+                placeholderTextColor="#999"
+              />
+              
+              <ThemedText style={styles.modalLabel}>Adresse de destination:</ThemedText>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Entrez l'adresse de destination"
+                value={destinationAdress}
+                onChangeText={setDestinationAdress}
+                multiline
+                numberOfLines={2}
+                placeholderTextColor="#999"
+              />
+              
+              <ThemedText style={styles.modalLabel}>Changer de transporteur (optionnel):</ThemedText>
+              <ScrollView style={styles.transporterList} showsVerticalScrollIndicator={false}>
                 <TouchableOpacity
-                  key={transporter.id}
-                  style={styles.modalListItem}
-                  onPress={() => {
-                    if (!pickUpAdress.trim()) {
-                      Alert.alert('Erreur', 'Veuillez entrer l\'adresse de collecte');
-                      return;
-                    }
-                    if (!destinationAdress.trim()) {
-                      Alert.alert('Erreur', 'Veuillez entrer l\'adresse de destination');
-                      return;
-                    }
-                    handleAssignTransporter(
-                      selectedParcelForAssign?.id, 
-                      transporter.id,
-                      pickUpAdress,
-                      destinationAdress
-                    );
-                  }}
+                  style={[
+                    styles.transporterOption,
+                    !selectedTransporterId && styles.transporterOptionSelected
+                  ]}
+                  onPress={() => setSelectedTransporterId(null)}
                 >
-                  <View style={styles.modalListItemContent}>
-                    <Ionicons name="person" size={20} color={Colors.primary} />
-                    <View style={styles.modalListItemInfo}>
-                      <ThemedText style={styles.modalListItemName}>
+                  <Ionicons name="person-outline" size={20} color={selectedTransporterId ? "#666" : Colors.primary} />
+                  <ThemedText style={[
+                    styles.transporterOptionText,
+                    !selectedTransporterId && styles.transporterOptionTextSelected
+                  ]}>
+                    Conserver le transporteur actuel
+                  </ThemedText>
+                </TouchableOpacity>
+                
+                {transporters.map(transporter => (
+                  <TouchableOpacity
+                    key={transporter.id}
+                    style={[
+                      styles.transporterOption,
+                      selectedTransporterId === transporter.id && styles.transporterOptionSelected
+                    ]}
+                    onPress={() => setSelectedTransporterId(transporter.id)}
+                  >
+                    <Ionicons name="car" size={20} color={selectedTransporterId === transporter.id ? Colors.primary : "#666"} />
+                    <View style={styles.transporterOptionInfo}>
+                      <ThemedText style={[
+                        styles.transporterOptionText,
+                        selectedTransporterId === transporter.id && styles.transporterOptionTextSelected
+                      ]}>
                         {transporter.firstname} {transporter.lastname}
                       </ThemedText>
-                      <ThemedText style={styles.modalListItemEmail}>
+                      <ThemedText style={styles.transporterOptionEmail}>
                         {transporter.email}
                       </ThemedText>
                     </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#666" />
-                </TouchableOpacity>
-              ))
-            )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            
+            <View style={styles.assignModalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelModalButton]}
+                onPress={() => setAssignModalVisible(false)}
+              >
+                <ThemedText style={styles.cancelModalButtonText}>
+                  Annuler
+                </ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmModalButton]}
+                onPress={handleUpdateParcel}
+                disabled={processingParcelId === selectedParcelForAssign?.id}
+              >
+                {processingParcelId === selectedParcelForAssign?.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <ThemedText style={styles.confirmModalButtonText}>
+                    Enregistrer
+                  </ThemedText>
+                )}
+              </TouchableOpacity>
+            </View>
           </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderParcelDetailsModal = () => (
+    <Modal
+      visible={parcelDetailsModalVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setParcelDetailsModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>
+              Détails du colis
+            </ThemedText>
+            <TouchableOpacity onPress={() => setParcelDetailsModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          {selectedParcelDetails && (
+            <ScrollView>
+              <ThemedCard style={styles.modalAuctionCard}>
+                <ThemedText style={styles.modalAuctionTitle}>
+                  Colis #{selectedParcelDetails.id.substring(0, 8)}
+                </ThemedText>
+                
+                <View style={styles.modalAuctionDetail}>
+                  <Ionicons name="hammer" size={16} color={Colors.primary} />
+                  <ThemedText style={styles.modalAuctionDetailText}>
+                    Enchère: {getAuctionTitle(selectedParcelDetails.auctionId)}
+                  </ThemedText>
+                </View>
+
+                <View style={styles.modalAuctionDetail}>
+                  <Ionicons name="person" size={16} color={Colors.primary} />
+                  <ThemedText style={styles.modalAuctionDetailText}>
+                    Acheteur: {getUserName(selectedParcelDetails.buyerId)}
+                  </ThemedText>
+                </View>
+
+                {selectedParcelDetails.auctionId && (
+                  <View style={styles.modalAuctionDetail}>
+                    <Ionicons name="storefront" size={16} color={Colors.primary} />
+                    <ThemedText style={styles.modalAuctionDetailText}>
+                      Vendeur: {userNames[auctions.find(a => a.id === selectedParcelDetails.auctionId)?.sellerId] || 'Chargement...'}
+                    </ThemedText>
+                  </View>
+                )}
+
+                <View style={styles.modalAuctionDetail}>
+                  <Ionicons name="car" size={16} color={Colors.primary} />
+                  <ThemedText style={styles.modalAuctionDetailText}>
+                    Transporteur: {selectedParcelDetails.transporterId ? 
+                      getUserName(selectedParcelDetails.transporterId) : 'Non assigné'}
+                  </ThemedText>
+                </View>
+
+                <View style={styles.modalAuctionDetail}>
+                  <Ionicons name="location" size={16} color={Colors.primary} />
+                  <ThemedText style={styles.modalAuctionDetailText}>
+                    Point de collecte: {selectedParcelDetails.pickUpAdress || 'Non défini'}
+                  </ThemedText>
+                </View>
+
+                <View style={styles.modalAuctionDetail}>
+                  <Ionicons name="navigate" size={16} color={Colors.primary} />
+                  <ThemedText style={styles.modalAuctionDetailText}>
+                    Destination: {selectedParcelDetails.destinationAdress || 'Non définie'}
+                  </ThemedText>
+                </View>
+
+                <View style={styles.modalAuctionDetail}>
+                  <Ionicons name="calendar" size={16} color={Colors.primary} />
+                  <ThemedText style={styles.modalAuctionDetailText}>
+                    Statut: {selectedParcelDetails.delivred ? 'Livré' : 
+                      selectedParcelDetails.transporterId ? 'En cours' : 'En attente'}
+                  </ThemedText>
+                </View>
+
+                {selectedParcelDetails.delivred && selectedParcelDetails.isValid !== null && (
+                  <View style={styles.modalAuctionDetail}>
+                    <Ionicons 
+                      name={selectedParcelDetails.isValid ? "checkmark-circle" : "alert-circle"} 
+                      size={16} 
+                      color={selectedParcelDetails.isValid ? "#4ade80" : "#ef4444"} 
+                    />
+                    <ThemedText style={styles.modalAuctionDetailText}>
+                      Qualité: {selectedParcelDetails.isValid ? 'Produit conforme' : 'Produit non conforme'}
+                    </ThemedText>
+                  </View>
+                )}
+
+                {!selectedParcelDetails.isValid && selectedParcelDetails.unvalidDescription && (
+                  <View style={styles.modalAuctionDetail}>
+                    <Ionicons name="document-text" size={16} color={Colors.warning} />
+                    <ThemedText style={styles.modalAuctionDetailText}>
+                      Motif: {selectedParcelDetails.unvalidDescription}
+                    </ThemedText>
+                  </View>
+                )}
+              </ThemedCard>
+            </ScrollView>
+          )}
         </View>
       </View>
     </Modal>
@@ -2119,7 +2353,8 @@ const AdminDashboard = () => {
 
       {renderAuctionDetails()}
       {renderBlockModal()}
-      {renderAssignModal()}
+      {renderEditParcelModal()}
+      {renderParcelDetailsModal()}
     </ThemedView>
   );
 };
@@ -2316,12 +2551,6 @@ const styles = StyleSheet.create({
     color: '#fff', 
     fontWeight: '600' 
   },
-  filterTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginLeft: 4,
-  },
   customDateContainer: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
@@ -2474,16 +2703,6 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     alignSelf: 'flex-start' 
   },
-  statusBadgeSmall: { 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 12 
-  },
-  statusBadgeTextSmall: { 
-    color: '#fff', 
-    fontSize: 10, 
-    fontWeight: '600' 
-  },
   statusText: { 
     color: '#fff', 
     fontSize: 11, 
@@ -2496,6 +2715,114 @@ const styles = StyleSheet.create({
     borderRadius: 18, 
     justifyContent: 'center', 
     alignItems: 'center' 
+  },
+  fullWidthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  fullWidthButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editButton: {
+    backgroundColor: '#3b82f6',
+  },
+  assignModalContent: {
+    maxHeight: '80%',
+  },
+  assignForm: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  assignModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  transporterList: {
+    maxHeight: 300,
+    marginTop: 8,
+  },
+  transporterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    marginBottom: 8,
+    gap: 12,
+  },
+  transporterOptionSelected: {
+    backgroundColor: Colors.primary + '10',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  transporterOptionInfo: {
+    flex: 1,
+  },
+  transporterOptionText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  transporterOptionTextSelected: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  transporterOptionEmail: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  userFilterTabs: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  userFilterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    gap: 6,
+  },
+  userFilterTabActive: {
+    backgroundColor: Colors.primary,
+  },
+  userFilterTabText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+  userFilterTabTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  blockedBadge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  blockedBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  blockedRow: {
+    backgroundColor: '#fee2e2',
   },
   auctionFilters: { 
     flexDirection: 'row', 
@@ -2529,8 +2856,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', 
     borderRadius: 12, 
     borderWidth: 1, 
-    borderColor: '#f0f0f0', 
-    shadowOpacity: 0 
+    borderColor: '#f0f0f0' 
+  },
+  auctionItemContent: { 
+    flex: 1 
   },
   auctionItemHeader: { 
     flexDirection: 'row', 
@@ -2541,12 +2870,39 @@ const styles = StyleSheet.create({
   auctionTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: 8,
+    flex: 1,
   },
   auctionItemTitle: { 
     fontSize: 15, 
     fontWeight: '600', 
     flex: 1 
+  },
+  auctionStatusBadge: { 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: 12, 
+    marginLeft: 8,
+  },
+  auctionStatusText: { 
+    color: '#fff', 
+    fontSize: 11, 
+    fontWeight: '600' 
+  },
+  statusActive: { 
+    backgroundColor: '#4ade80' 
+  },
+  statusPending: { 
+    backgroundColor: '#fbbf24' 
+  },
+  statusDenied: { 
+    backgroundColor: '#ef4444' 
+  },
+  statusEnded: { 
+    backgroundColor: '#9ca3af' 
+  },
+  statusDefault: { 
+    backgroundColor: '#666' 
   },
   auctionItemDetails: { 
     flexDirection: 'row', 
@@ -2639,7 +2995,8 @@ const styles = StyleSheet.create({
   },
   parcelDetailText: { 
     fontSize: 12, 
-    color: '#666' 
+    color: '#666', 
+    flex: 1 
   },
   parcelActions: { 
     flexDirection: 'row', 
@@ -2648,18 +3005,6 @@ const styles = StyleSheet.create({
     paddingTop: 10, 
     borderTopWidth: 1, 
     borderTopColor: '#f0f0f0' 
-  },
-  assignButton: { 
-    backgroundColor: '#3b82f6' 
-  },
-  deliverButton: { 
-    backgroundColor: '#4ade80' 
-  },
-  actionButtonText: { 
-    color: '#fff', 
-    fontSize: 12, 
-    fontWeight: '600', 
-    marginLeft: 6 
   },
   qualityInfo: { 
     marginTop: 8, 
@@ -2681,45 +3026,81 @@ const styles = StyleSheet.create({
     width: '100%', 
     marginTop: 4 
   },
-  notificationRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 12, 
-    paddingHorizontal: 10, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f0f0f0' 
+  notificationsContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
-  unreadNotificationRow: { 
-    backgroundColor: '#f8f9fa' 
+  notificationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  selectedNotificationRow: { 
-    backgroundColor: Colors.primary + '10' 
+  notificationsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  notificationIcon: { 
-    width: 40, 
-    alignItems: 'center' 
+  notificationsList: {
+    flex: 1,
   },
-  notificationContent: { 
-    flex: 1, 
-    marginLeft: 8 
+  notificationItem: {
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  notificationMessage: { 
-    fontSize: 14, 
-    marginBottom: 4 
+  unreadNotificationItem: {
+    backgroundColor: '#f8f9fa',
   },
-  unreadNotificationMessage: { 
-    fontWeight: '700' 
+  selectedNotificationItem: {
+    backgroundColor: Colors.primary + '10',
   },
-  notificationDate: { 
-    fontSize: 11, 
-    opacity: 0.6 
+  notificationItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  unreadDot: { 
-    width: 10, 
-    height: 10, 
-    borderRadius: 5, 
-    backgroundColor: Colors.primary, 
-    marginLeft: 10 
+  notificationIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationTextContainer: {
+    flex: 1,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  unreadNotificationMessage: {
+    fontWeight: '700',
+  },
+  notificationTime: {
+    fontSize: 11,
+    color: '#999',
+  },
+  emptyNotificationsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyNotificationsText: {
+    fontSize: 16,
+    opacity: 0.6,
+    marginTop: 12,
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+    marginLeft: 10,
   },
   selectText: { 
     fontSize: 12, 
@@ -2729,16 +3110,6 @@ const styles = StyleSheet.create({
   selectionActions: { 
     flexDirection: 'row', 
     gap: 12 
-  },
-  noNotificationsContainer: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 40 
-  },
-  noNotificationsText: { 
-    fontSize: 16, 
-    opacity: 0.6, 
-    marginTop: 12 
   },
   daysPicker: { 
     flexDirection: 'row', 
@@ -2819,12 +3190,6 @@ const styles = StyleSheet.create({
     minHeight: 60,
     textAlignVertical: 'top',
   },
-  noTransportersText: {
-    textAlign: 'center',
-    padding: 20,
-    color: '#666',
-    fontStyle: 'italic',
-  },
   cancelModalButton: { 
     backgroundColor: '#f0f0f0' 
   },
@@ -2843,30 +3208,6 @@ const styles = StyleSheet.create({
   },
   modalList: { 
     maxHeight: 400 
-  },
-  modalListItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingVertical: 12, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f0f0f0' 
-  },
-  modalListItemContent: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12 
-  },
-  modalListItemInfo: { 
-    flex: 1 
-  },
-  modalListItemName: { 
-    fontSize: 14, 
-    fontWeight: '600' 
-  },
-  modalListItemEmail: { 
-    fontSize: 12, 
-    opacity: 0.7 
   },
   photoStrip: { 
     marginBottom: 15 

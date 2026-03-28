@@ -18,6 +18,8 @@ import ThemedCard from '../../components/ThemedCard';
 import { useAuth } from '../../hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { fetchParcelsByBuyer } from '../../store/slices/parcelSlice';
+import { userService } from '../../store/services/userService';
+import { auctionService } from '../../store/services/auctionService';
 import { Colors } from '../../constants/Colors';
 
 const MyParcels = () => {
@@ -29,6 +31,8 @@ const MyParcels = () => {
   const { buyerParcels, loading } = useAppSelector((state) => state.parcel);
   
   const [refreshing, setRefreshing] = useState(false);
+  const [auctionNames, setAuctionNames] = useState({});
+  const [transporterNames, setTransporterNames] = useState({});
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -43,6 +47,7 @@ const MyParcels = () => {
 
   useEffect(() => {
     calculateStats();
+    loadNames();
   }, [buyerParcels]);
 
   const loadParcels = async () => {
@@ -51,6 +56,38 @@ const MyParcels = () => {
     } catch (error) {
       console.error('Error loading parcels:', error);
     }
+  };
+
+  const loadNames = async () => {
+    const auctionMap = {};
+    const transporterMap = {};
+    
+    for (const parcel of buyerParcels) {
+      // Load auction names
+      if (parcel.auctionId && !auctionMap[parcel.auctionId]) {
+        try {
+          const auction = await auctionService.getAuctionById(parcel.auctionId);
+          auctionMap[parcel.auctionId] = auction?.title || `Enchère #${parcel.auctionId.substring(0, 8)}`;
+        } catch (error) {
+          auctionMap[parcel.auctionId] = `Enchère #${parcel.auctionId.substring(0, 8)}`;
+        }
+      }
+      
+      // Load transporter names
+      if (parcel.transporterId && !transporterMap[parcel.transporterId]) {
+        try {
+          const transporter = await userService.getUserById(parcel.transporterId);
+          transporterMap[parcel.transporterId] = transporter ? 
+            `${transporter.firstname || ''} ${transporter.lastname || ''}`.trim() || transporter.email :
+            `Transporteur #${parcel.transporterId.substring(0, 8)}`;
+        } catch (error) {
+          transporterMap[parcel.transporterId] = `Transporteur #${parcel.transporterId.substring(0, 8)}`;
+        }
+      }
+    }
+    
+    setAuctionNames(auctionMap);
+    setTransporterNames(transporterMap);
   };
 
   const calculateStats = () => {
@@ -99,29 +136,29 @@ const MyParcels = () => {
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
-        <ThemedCard style={styles.statCard}>
+        <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: Colors.primary + '20' }]}>
             <Ionicons name="cube" size={24} color={Colors.primary} />
           </View>
           <ThemedText style={styles.statValue}>{stats.total}</ThemedText>
           <ThemedText style={styles.statLabel}>Total colis</ThemedText>
-        </ThemedCard>
+        </View>
 
-        <ThemedCard style={styles.statCard}>
+        <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#fbbf24' + '20' }]}>
             <Ionicons name="time" size={24} color="#fbbf24" />
           </View>
           <ThemedText style={styles.statValue}>{stats.pending}</ThemedText>
           <ThemedText style={styles.statLabel}>En attente</ThemedText>
-        </ThemedCard>
+        </View>
 
-        <ThemedCard style={styles.statCard}>
+        <View style={styles.statCard}>
           <View style={[styles.statIcon, { backgroundColor: '#4ade80' + '20' }]}>
             <Ionicons name="checkmark-circle" size={24} color="#4ade80" />
           </View>
           <ThemedText style={styles.statValue}>{stats.delivered}</ThemedText>
           <ThemedText style={styles.statLabel}>Livrés</ThemedText>
-        </ThemedCard>
+        </View>
       </View>
 
       {/* Parcels List */}
@@ -143,8 +180,12 @@ const MyParcels = () => {
           </View>
         ) : (
           buyerParcels.map(parcel => (
-            <TouchableOpacity key={parcel.id} onPress={() => handleParcelPress(parcel.id)}>
-              <ThemedCard style={styles.parcelCard}>
+            <TouchableOpacity 
+              key={parcel.id} 
+              onPress={() => handleParcelPress(parcel.id)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.parcelCard}>
                 <View style={styles.parcelHeader}>
                   <View style={styles.parcelId}>
                     <Ionicons name="cube" size={20} color={Colors.primary} />
@@ -165,17 +206,47 @@ const MyParcels = () => {
                 <View style={styles.parcelDetails}>
                   <View style={styles.detailRow}>
                     <Ionicons name="hammer" size={16} color="#666" />
-                    <ThemedText style={styles.detailText}>
-                      Enchère #{parcel.auctionId?.substring(0, 8)}...
-                    </ThemedText>
+                    <View style={styles.detailContent}>
+                      <ThemedText style={styles.detailLabel}>Enchère</ThemedText>
+                      <ThemedText style={styles.detailValue}>
+                        {auctionNames[parcel.auctionId] || `Enchère #${parcel.auctionId?.substring(0, 8)}`}
+                      </ThemedText>
+                    </View>
                   </View>
 
                   {parcel.transporterId && (
                     <View style={styles.detailRow}>
                       <Ionicons name="car" size={16} color="#666" />
-                      <ThemedText style={styles.detailText}>
-                        Transporteur: {parcel.transporterId.substring(0, 8)}...
-                      </ThemedText>
+                      <View style={styles.detailContent}>
+                        <ThemedText style={styles.detailLabel}>Transporteur</ThemedText>
+                        <ThemedText style={styles.detailValue}>
+                          {transporterNames[parcel.transporterId] || `Transporteur #${parcel.transporterId.substring(0, 8)}`}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  )}
+
+                  {parcel.pickUpAdress && (
+                    <View style={styles.detailRow}>
+                      <Ionicons name="location" size={16} color="#666" />
+                      <View style={styles.detailContent}>
+                        <ThemedText style={styles.detailLabel}>Point de collecte</ThemedText>
+                        <ThemedText style={styles.detailValue} numberOfLines={2}>
+                          {parcel.pickUpAdress}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  )}
+
+                  {parcel.destinationAdress && (
+                    <View style={styles.detailRow}>
+                      <Ionicons name="navigate" size={16} color="#666" />
+                      <View style={styles.detailContent}>
+                        <ThemedText style={styles.detailLabel}>Destination</ThemedText>
+                        <ThemedText style={styles.detailValue} numberOfLines={2}>
+                          {parcel.destinationAdress}
+                        </ThemedText>
+                      </View>
                     </View>
                   )}
 
@@ -196,7 +267,7 @@ const MyParcels = () => {
                     </View>
                   )}
                 </View>
-              </ThemedCard>
+              </View>
             </TouchableOpacity>
           ))
         )}
@@ -255,6 +326,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     padding: 15,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   statIcon: {
     width: 50,
@@ -279,13 +357,17 @@ const styles = StyleSheet.create({
   },
   parcelCard: {
     marginBottom: 15,
-    padding: 15,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   parcelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   parcelId: {
     flexDirection: 'row',
@@ -311,12 +393,20 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
   },
-  detailText: {
+  detailContent: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 11,
+    opacity: 0.6,
+    marginBottom: 2,
+  },
+  detailValue: {
     fontSize: 13,
-    color: '#666',
+    fontWeight: '500',
   },
   qualityStatus: {
     flexDirection: 'row',

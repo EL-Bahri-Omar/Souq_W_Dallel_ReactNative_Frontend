@@ -1,41 +1,43 @@
-import { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  ScrollView, 
-  TouchableOpacity, 
+import { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  TouchableOpacity,
   Image,
   TextInput,
   FlatList,
   RefreshControl,
-  ActivityIndicator
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'react-native';
-import ThemedView from '../components/ThemedView';
-import ThemedText from '../components/ThemedText';
-import AuctionCard from '../components/AuctionCard';
-import { useAuth } from '../hooks/useAuth';
-import { useAppDispatch, useAppSelector } from '../hooks/useAppDispatch';
-import { fetchAllAuctions } from '../store/slices/auctionSlice';
-import { fetchUserById } from '../store/slices/userSlice';
-import { Colors } from '../constants/Colors';
-import { userService } from '../store/services/userService';
+  ActivityIndicator,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useColorScheme } from "react-native";
+import ThemedView from "../components/ThemedView";
+import ThemedText from "../components/ThemedText";
+import AuctionCard from "../components/AuctionCard";
+import LeftSidebar from "../components/LeftSidebar";
+import RightSidebar from "../components/RightSidebar";
+import { useAuth } from "../hooks/useAuth";
+import { useAppDispatch, useAppSelector } from "../hooks/useAppDispatch";
+import { fetchAllAuctions } from "../store/slices/auctionSlice";
+import { fetchUserById } from "../store/slices/userSlice";
+import { Colors } from "../constants/Colors";
+import { userService } from "../store/services/userService";
 
 const categories = [
-  { id: 'all', label: 'Toutes', icon: 'apps-outline' },
-  { id: 'electronics', label: 'Électronique', icon: 'tv-outline' },
-  { id: 'furniture', label: 'Meubles', icon: 'bed-outline' },
-  { id: 'vehicles', label: 'Véhicules', icon: 'car-outline' },
-  { id: 'real-estate', label: 'Immobilier', icon: 'home-outline' },
-  { id: 'collectibles', label: 'Collection', icon: 'albums-outline' },
-  { id: 'art', label: 'Art', icon: 'color-palette-outline' },
-  { id: 'jewelry', label: 'Bijoux', icon: 'diamond-outline' },
-  { id: 'clothing', label: 'Vêtements', icon: 'shirt-outline' },
-  { id: 'sports', label: 'Sports', icon: 'basketball-outline' },
-  { id: 'general', label: 'Général', icon: 'apps-outline' },
+  { id: "all", label: "Toutes", icon: "apps-outline" },
+  { id: "electronics", label: "Électronique", icon: "tv-outline" },
+  { id: "furniture", label: "Meubles", icon: "bed-outline" },
+  { id: "vehicles", label: "Véhicules", icon: "car-outline" },
+  { id: "real-estate", label: "Immobilier", icon: "home-outline" },
+  { id: "collectibles", label: "Collection", icon: "albums-outline" },
+  { id: "art", label: "Art", icon: "color-palette-outline" },
+  { id: "jewelry", label: "Bijoux", icon: "diamond-outline" },
+  { id: "clothing", label: "Vêtements", icon: "shirt-outline" },
+  { id: "sports", label: "Sports", icon: "basketball-outline" },
+  { id: "general", label: "Général", icon: "apps-outline" },
 ];
 
 const Home = () => {
@@ -46,12 +48,14 @@ const Home = () => {
   const dispatch = useAppDispatch();
   const { auctions, loading } = useAppSelector((state) => state.auction);
   const { user: userData } = useAppSelector((state) => state.user);
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
   const [userPhotoUrl, setUserPhotoUrl] = useState(null);
   const [photoRefreshing, setPhotoRefreshing] = useState(false);
+  const [leftSidebarVisible, setLeftSidebarVisible] = useState(false);
+  const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
 
   useEffect(() => {
     loadAuctions();
@@ -72,7 +76,7 @@ const Home = () => {
     try {
       await dispatch(fetchUserById(authUser.id)).unwrap();
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error("Error loading user data:", error);
     }
   };
 
@@ -87,7 +91,7 @@ const Home = () => {
       const photoUrl = `${userService.getUserPhotoUrl(userData.id, userData.photoId)}?t=${Date.now()}`;
       setUserPhotoUrl(photoUrl);
     } catch (error) {
-      console.error('Error loading user photo:', error);
+      console.error("Error loading user photo:", error);
       setUserPhotoUrl(null);
     } finally {
       setPhotoRefreshing(false);
@@ -98,7 +102,7 @@ const Home = () => {
     try {
       await dispatch(fetchAllAuctions()).unwrap();
     } catch (error) {
-      console.error('Error loading auctions:', error);
+      console.error("Error loading auctions:", error);
     }
   };
 
@@ -111,56 +115,82 @@ const Home = () => {
     setRefreshing(false);
   };
 
-  const filteredAuctions = auctions.filter(auction => {
-    const matchesSearch = searchQuery === '' || 
+  const filteredAuctions = auctions.filter((auction) => {
+    const matchesSearch =
+      searchQuery === "" ||
       auction.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       auction.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesCategory = selectedCategory === 'all' || 
-      auction.category === selectedCategory;
-    
+
+    const matchesCategory =
+      selectedCategory === "all" || auction.category === selectedCategory;
+
     const now = new Date();
     const isExpired = auction.expireDate && new Date(auction.expireDate) <= now;
-    const isActive = !isExpired && auction.status?.toLowerCase() === 'active';
-    
+    const isActive = !isExpired && auction.status?.toLowerCase() === "active";
+
     return matchesSearch && matchesCategory && isActive;
   });
 
-  const displayName = userData?.firstname || userData?.lastname 
-    ? `${userData.firstname || ''} ${userData.lastname || ''}`.trim()
-    : authUser?.email?.split('@')[0] || 'Utilisateur';
+  const displayName =
+    userData?.firstname || userData?.lastname
+      ? `${userData.firstname || ""} ${userData.lastname || ""}`.trim()
+      : authUser?.email?.split("@")[0] || "Utilisateur";
 
   return (
     <ThemedView safe style={styles.container}>
+      {/* Left Sidebar Menu */}
+      <LeftSidebar
+        visible={leftSidebarVisible}
+        onClose={() => setLeftSidebarVisible(false)}
+      />
+
+      {/* Right Sidebar Filters */}
+      <RightSidebar
+        visible={rightSidebarVisible}
+        onClose={() => setRightSidebarVisible(false)}
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
+      />
+
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.navBackground }]}>
-        <View style={styles.logoContainer}>
-          <Ionicons name="hammer" size={32} color={Colors.primary} />
-          <ThemedText title style={styles.appName}>
-            Souq w Dallel
-          </ThemedText>
+        <View style={styles.headerLeft}>
+          {/* Menu Button */}
+          <TouchableOpacity
+            onPress={() => setLeftSidebarVisible(true)}
+            style={styles.menuButton}
+          >
+            <Ionicons name="menu" size={28} color={Colors.primary} />
+          </TouchableOpacity>
+
+          <View style={styles.logoContainer}>
+            <Ionicons name="hammer" size={28} color={Colors.primary} />
+            <ThemedText title style={styles.appName}>
+              Souq w Dallel
+            </ThemedText>
+          </View>
         </View>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.profileContainer}
-          onPress={() => router.push('/(dashboard)/profile')}
+          onPress={() => router.push("/(dashboard)/profile")}
         >
           <View style={styles.profileInfo}>
             <ThemedText style={styles.profileName} numberOfLines={1}>
               {displayName}
             </ThemedText>
           </View>
-          
+
           <View style={styles.photoContainer}>
             {userPhotoUrl && !photoRefreshing ? (
-              <Image 
-                source={{ uri: userPhotoUrl }} 
+              <Image
+                source={{ uri: userPhotoUrl }}
                 style={styles.profilePhoto}
                 onError={() => setUserPhotoUrl(null)}
               />
             ) : (
               <LinearGradient
-                colors={[Colors.primary, '#764ba2']}
+                colors={[Colors.primary, "#764ba2"]}
                 style={styles.defaultPhoto}
               >
                 {photoRefreshing ? (
@@ -176,10 +206,15 @@ const Home = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
+      {/* Search and Filter Row */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <Ionicons
+            name="search"
+            size={20}
+            color="#666"
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
             placeholder="Rechercher des enchères..."
@@ -188,43 +223,19 @@ const Home = () => {
             placeholderTextColor="#666"
           />
           {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
               <Ionicons name="close-circle" size={20} color="#666" />
             </TouchableOpacity>
           ) : null}
         </View>
-      </View>
 
-      {/* Category Filters */}
-      <View style={styles.categoriesWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesContainer}
+        {/* Filter Button */}
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => setRightSidebarVisible(true)}
         >
-          {categories.map(category => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryButton,
-                selectedCategory === category.id && styles.categoryButtonActive
-              ]}
-              onPress={() => setSelectedCategory(category.id)}
-            >
-              <Ionicons 
-                name={category.icon} 
-                size={18} 
-                color={selectedCategory === category.id ? '#fff' : '#666'} 
-              />
-              <ThemedText style={[
-                styles.categoryText,
-                selectedCategory === category.id && styles.categoryTextActive
-              ]}>
-                {category.label}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+          <Ionicons name="options-outline" size={24} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       {/* Auctions List */}
@@ -232,7 +243,7 @@ const Home = () => {
         data={filteredAuctions}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <AuctionCard 
+          <AuctionCard
             auction={item}
             onPress={() => router.push(`/auction-details/${item.id}`)}
           />
@@ -248,7 +259,7 @@ const Home = () => {
               Aucune enchère trouvée
             </ThemedText>
             <ThemedText style={styles.emptySubtext}>
-              {loading ? 'Chargement...' : 'Soyez le premier à en créer une !'}
+              {loading ? "Chargement..." : "Soyez le premier à en créer une !"}
             </ThemedText>
           </View>
         }
@@ -266,72 +277,84 @@ const styles = StyleSheet.create({
   },
   header: {
     height: 70,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 15,
     paddingTop: 10,
     paddingBottom: 15,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  menuButton: {
+    padding: 5,
+    marginRight: 10,
+  },
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   appName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
+    fontWeight: "bold",
+    marginLeft: 8,
     color: Colors.primary,
   },
   profileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   profileInfo: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     marginRight: 10,
     maxWidth: 120,
   },
   profileName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   photoContainer: {
     width: 40,
     height: 40,
     borderRadius: 25,
-    overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
+    overflow: "hidden",
+    backgroundColor: "#f0f0f0",
   },
   profilePhoto: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   defaultPhoto: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
   defaultPhotoText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   searchContainer: {
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
     borderRadius: 10,
     paddingHorizontal: 15,
-    paddingVertical: -2,
+    paddingVertical: 8,
   },
   searchIcon: {
     marginRight: 10,
@@ -339,53 +362,34 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
-  categoriesWrapper: {
-    marginBottom: 10,
-  },
-  categoriesContainer: {
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  categoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    gap: 6,
-  },
-  categoryButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  categoryText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  categoryTextActive: {
-    color: '#fff',
-    fontWeight: '600',
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
   },
   auctionsList: {
     padding: 20,
     paddingTop: 3,
   },
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 60,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 15,
     marginBottom: 5,
   },
   emptySubtext: {
     fontSize: 14,
     opacity: 0.7,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

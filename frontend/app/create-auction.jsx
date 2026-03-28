@@ -637,6 +637,26 @@ const CreateAuction = () => {
 
             <Spacer height={30} />
 
+            {/* Fee Information Banner */}
+            <View style={styles.feeInfoBanner}>
+              <View style={styles.feeInfoHeader}>
+                <Ionicons name="information-circle" size={22} color="#856404" />
+                <ThemedText style={styles.feeInfoTitle}>
+                  Information importante
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.feeInfoText}>
+                Lorsque votre enchère est gagnée, une commission de 5% sur le montant final sera prélevée par la plateforme.
+                Cette commission est automatiquement déduite du paiement effectué par l'acheteur.
+              </ThemedText>
+              <View style={styles.feeInfoHighlight}>
+                <Ionicons name="cash-outline" size={16} color="#856404" />
+                <ThemedText style={styles.feeInfoHighlightText}>
+                  Exemple : Pour une enchère gagnée à 1000 TND, la commission sera de 50 TND
+                </ThemedText>
+              </View>
+            </View>
+
             <View style={styles.buttonsContainer}>
               <ThemedButton
                 onPress={handleSubmit}
@@ -1519,5 +1539,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 10,
+  },
+  feeInfoBanner: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#ffc107',
+  },
+  feeInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  feeInfoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#856404',
+  },
+  feeInfoText: {
+    fontSize: 13,
+    color: '#856404',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  feeInfoHighlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 5,
+  },
+  feeInfoHighlightText: {
+    fontSize: 12,
+    color: '#856404',
+    fontWeight: '500',
+    flex: 1,
   },
 });

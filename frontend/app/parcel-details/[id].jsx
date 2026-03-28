@@ -23,6 +23,8 @@ import {
   updateParcelQuality 
 } from '../../store/slices/parcelSlice';
 import { Colors } from '../../constants/Colors';
+import { auctionService } from '../../store/services/auctionService';
+import { userService } from '../../store/services/userService';
 
 const ParcelDetails = () => {
   const router = useRouter();
@@ -38,6 +40,11 @@ const ParcelDetails = () => {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [auctionName, setAuctionName] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [transporterName, setTransporterName] = useState('');
+  const [sellerName, setSellerName] = useState('');
+  
   useEffect(() => {
     if (id) {
       loadParcel();
@@ -86,6 +93,48 @@ const ParcelDetails = () => {
       Alert.alert('Erreur', 'Échec de l\'enregistrement');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNames();
+  }, [currentParcel]);
+
+  const loadNames = async () => {
+    if (!currentParcel) return;
+    
+    // Load auction name
+    if (currentParcel.auctionId) {
+      try {
+        const auction = await auctionService.getAuctionById(currentParcel.auctionId);
+        setAuctionName(auction?.title || `Enchère #${currentParcel.auctionId.substring(0, 8)}`);
+      } catch (error) {
+        setAuctionName(`Enchère #${currentParcel.auctionId.substring(0, 8)}`);
+      }
+    }
+    
+    // Load buyer name
+    if (currentParcel.buyerId) {
+      try {
+        const buyer = await userService.getUserById(currentParcel.buyerId);
+        setBuyerName(buyer ? 
+          `${buyer.firstname || ''} ${buyer.lastname || ''}`.trim() || buyer.email :
+          `Acheteur #${currentParcel.buyerId.substring(0, 8)}`);
+      } catch (error) {
+        setBuyerName(`Acheteur #${currentParcel.buyerId.substring(0, 8)}`);
+      }
+    }
+    
+    // Load transporter name
+    if (currentParcel.transporterId) {
+      try {
+        const transporter = await userService.getUserById(currentParcel.transporterId);
+        setTransporterName(transporter ? 
+          `${transporter.firstname || ''} ${transporter.lastname || ''}`.trim() || transporter.email :
+          `Transporteur #${currentParcel.transporterId.substring(0, 8)}`);
+      } catch (error) {
+        setTransporterName(`Transporteur #${currentParcel.transporterId.substring(0, 8)}`);
+      }
     }
   };
 
@@ -155,25 +204,21 @@ const ParcelDetails = () => {
           </ThemedText>
           
           <View style={styles.detailRow}>
-            <Ionicons name="location" size={20} color={Colors.primary} />
+            <Ionicons name="hammer" size={20} color={Colors.primary} />
             <View style={styles.detailContent}>
-              <ThemedText style={styles.detailLabel}>
-                Point de collecte
-              </ThemedText>
+              <ThemedText style={styles.detailLabel}>Enchère</ThemedText>
               <ThemedText style={styles.detailValue}>
-                {currentParcel.pickUpAdress || 'À définir'}
+                {auctionName || 'Chargement...'}
               </ThemedText>
             </View>
           </View>
 
           <View style={styles.detailRow}>
-            <Ionicons name="navigate" size={20} color={Colors.primary} />
+            <Ionicons name="person" size={20} color={Colors.primary} />
             <View style={styles.detailContent}>
-              <ThemedText style={styles.detailLabel}>
-                Destination
-              </ThemedText>
+              <ThemedText style={styles.detailLabel}>Acheteur</ThemedText>
               <ThemedText style={styles.detailValue}>
-                {currentParcel.destinationAdress || 'À définir'}
+                {buyerName || 'Chargement...'}
               </ThemedText>
             </View>
           </View>
@@ -181,13 +226,9 @@ const ParcelDetails = () => {
           <View style={styles.detailRow}>
             <Ionicons name="car" size={20} color={Colors.primary} />
             <View style={styles.detailContent}>
-              <ThemedText style={styles.detailLabel}>
-                Transporteur
-              </ThemedText>
+              <ThemedText style={styles.detailLabel}>Transporteur</ThemedText>
               <ThemedText style={styles.detailValue}>
-                {currentParcel.transporterId ? 
-                  `ID: ${currentParcel.transporterId.substring(0, 8)}...` : 
-                  'En attente d\'assignation'}
+                {transporterName || (currentParcel.transporterId ? 'Chargement...' : 'En attente d\'assignation')}
               </ThemedText>
             </View>
           </View>

@@ -18,7 +18,7 @@ export const addReview = createAsyncThunk(
   async ({ auctionId, reviewerId, review }, { rejectWithValue }) => {
     try {
       await reviewService.addReview(auctionId, reviewerId, review);
-      return { auctionId, reviewerId, review };
+      return { auctionId };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -30,7 +30,7 @@ export const updateReview = createAsyncThunk(
   async ({ auctionId, reviewerId, oldReview, newReview }, { rejectWithValue }) => {
     try {
       await reviewService.updateReview(auctionId, reviewerId, oldReview, newReview);
-      return { auctionId, reviewerId, oldReview, newReview };
+      return { auctionId };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -42,7 +42,7 @@ export const deleteReview = createAsyncThunk(
   async ({ auctionId, reviewerId, review }, { rejectWithValue }) => {
     try {
       await reviewService.deleteReview(auctionId, reviewerId, review);
-      return { auctionId, reviewerId, review };
+      return { auctionId };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -76,14 +76,35 @@ const reviewSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      .addCase(addReview.fulfilled, (state, action) => {
+      .addCase(addReview.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(addReview.fulfilled, (state) => {
         state.loading = false;
       })
-      .addCase(updateReview.fulfilled, (state, action) => {
+      .addCase(addReview.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateReview.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(updateReview.fulfilled, (state) => {
         state.loading = false;
       })
-      .addCase(deleteReview.fulfilled, (state, action) => {
+      .addCase(updateReview.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteReview.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(deleteReview.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(deleteReview.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });
