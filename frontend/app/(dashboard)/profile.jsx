@@ -251,7 +251,7 @@ const Profile = () => {
               {/* Admin Dashboard Button */}
               {authUser?.role?.toUpperCase() === 'ADMIN' && (
                 <TouchableOpacity 
-                  onPress={() => router.push('/(admin)')}
+                  onPress={() => router.push('/(admin)/dashboard')}
                   style={[styles.headerIcon, { backgroundColor: Colors.primary, borderRadius: 20, padding: 8 }]}
                 >
                   <Ionicons name="shield" size={22} color="#fff" />

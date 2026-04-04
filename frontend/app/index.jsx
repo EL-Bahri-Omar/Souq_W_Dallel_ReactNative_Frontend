@@ -124,11 +124,10 @@ const Home = () => {
     const matchesCategory =
       selectedCategory === "all" || auction.category === selectedCategory;
 
-    const now = new Date();
-    const isExpired = auction.expireDate && new Date(auction.expireDate) <= now;
-    const isActive = !isExpired && auction.status?.toLowerCase() === "active";
+    // Show all auctions EXCEPT pending ones
+    const isNotPending = auction.status?.toLowerCase() !== "pending";
 
-    return matchesSearch && matchesCategory && isActive;
+    return matchesSearch && matchesCategory && isNotPending;
   });
 
   const displayName =

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -19,27 +19,17 @@ import { useColorScheme } from "react-native";
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedCard from "../../components/ThemedCard";
-import Spacer from "../../components/Spacer";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppDispatch, useAppSelector } from "../../hooks/useAppDispatch";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  fetchAuctionById,
-  placeBid,
-} from "../../store/slices/auctionSlice";
+import { fetchAuctionById, placeBid } from "../../store/slices/auctionSlice";
 import {
   fetchReviews,
   addReview,
   updateReview,
   deleteReview,
 } from "../../store/slices/reviewSlice";
-import {
-  checkPaymentStatus,
-  markAsPaid,
-} from "../../store/slices/paymentSlice";
 import { Colors } from "../../constants/Colors";
 import { auctionService } from "../../store/services/auctionService";
-import { depositService } from "../../store/services/depositService";
 import { userService } from "../../store/services/userService";
 import { paymentService } from "../../store/services/paymentService";
 import PaymentModal from "../../components/PaymentModal";
@@ -67,10 +57,9 @@ const AuctionDetails = () => {
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  const { currentAuction, loading, placingBid, reviews } = useAppSelector(
+  const { currentAuction, loading, placingBid } = useAppSelector(
     (state) => state.auction,
   );
-  const { paidUsers } = useAppSelector((state) => state.payment);
 
   // UI State
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -93,6 +82,7 @@ const AuctionDetails = () => {
   const [editingReview, setEditingReview] = useState(null);
   const [editReviewText, setEditReviewText] = useState("");
   const [openReviewMenuId, setOpenReviewMenuId] = useState(null);
+  const [forceRefresh, setForceRefresh] = useState(0);
 
   // Bid State
   const [bidAmount, setBidAmount] = useState("");
@@ -101,8 +91,6 @@ const AuctionDetails = () => {
   const [isHighestBidder, setIsHighestBidder] = useState(false);
   const [userParticipated, setUserParticipated] = useState(false);
   const [userWon, setUserWon] = useState(false);
-  const [hasPaidForThisAuction, setHasPaidForThisAuction] = useState(false);
-  const [checkingPaymentStatus, setCheckingPaymentStatus] = useState(false);
   const [paymentDeadline, setPaymentDeadline] = useState(null);
   const [timeUntilDeadline, setTimeUntilDeadline] = useState("");
 
@@ -113,8 +101,16 @@ const AuctionDetails = () => {
   const [isLastHour, setIsLastHour] = useState(false);
 
   // Payment State
-  const [hasPaidTax, setHasPaidTax] = useState(false);
   const [isFirstBid, setIsFirstBid] = useState(true);
+
+  // Force refresh function
+  const refreshAuction = useCallback(async () => {
+    if (id) {
+      console.log("Refreshing auction data...");
+      await dispatch(fetchAuctionById(id)).unwrap();
+      setForceRefresh((prev) => prev + 1);
+    }
+  }, [id, dispatch]);
 
   // Load auction data
   useEffect(() => {
@@ -124,109 +120,48 @@ const AuctionDetails = () => {
     }
   }, [id]);
 
+  // Reload auction when forceRefresh changes
+  useEffect(() => {
+    if (id && forceRefresh > 0) {
+      loadAuction();
+    }
+  }, [forceRefresh]);
+
+  // Debug effect
   useEffect(() => {
     console.log("=== AUCTION DETAILS DEBUG ===");
     console.log("Auction ID:", id);
     console.log("Auction Status:", currentAuction?.status);
     console.log("User Won:", userWon);
     console.log("isExpired:", isExpired);
-    console.log("hasPaidForThisAuction:", hasPaidForThisAuction);
+    console.log("isPaid:", currentAuction?.isPaid);
     console.log("paymentDeadline:", paymentDeadline);
+    console.log("Auction expireDate:", currentAuction?.expireDate);
     console.log("================================");
   }, [
     currentAuction?.status,
+    currentAuction?.isPaid,
+    currentAuction?.expireDate,
     userWon,
     isExpired,
-    hasPaidForThisAuction,
     paymentDeadline,
     id,
   ]);
 
   useEffect(() => {
-    const checkAuctionPayment = async () => {
-      if (user?.id && id && currentAuction?.status === "ended" && userWon) {
-        setCheckingPaymentStatus(true);
-        try {
-          // First check local storage
-          let paid = await paymentService.hasPaidForAuction(user.id, id);
-
-          // If local says not paid, check backend to be sure (if method exists)
-          if (
-            !paid &&
-            typeof paymentService.checkBackendPaymentStatus === "function"
-          ) {
-            paid = await paymentService.checkBackendPaymentStatus(id);
-          }
-
-          setHasPaidForThisAuction(paid);
-        } catch (error) {
-          console.error("Error checking payment status:", error);
-          setHasPaidForThisAuction(false);
-        } finally {
-          setCheckingPaymentStatus(false);
-        }
-      } else if (
-        user?.id &&
-        id &&
-        currentAuction?.status === "ended" &&
-        userWon === false
-      ) {
-        // If user is not winner, ensure payment status is false
-        setHasPaidForThisAuction(false);
-      } else if (user?.id && id && currentAuction?.status !== "ended") {
-        // Reset payment status if auction is not ended yet
-        setHasPaidForThisAuction(false);
-      } else {
-        // Default reset
-        setHasPaidForThisAuction(false);
-      }
-    };
-
-    checkAuctionPayment();
-  }, [user?.id, id, currentAuction?.status, userWon]);
-
-  useEffect(() => {
     // Reset all payment-related state when loading a new auction
-    setHasPaidForThisAuction(false);
     setUserWon(false);
     setPaymentDeadline(null);
     setShowAuctionPaymentModal(false);
+    setIsExpired(false);
   }, [id]);
-
-  
-   const checkBackendPaymentStatus = async (auctionId) => {
-     try {
-       const deposits = await depositService.getDepositsByAuctionId(auctionId);
-       const auctionPayment = deposits.find((d) => d.type === "AUCTION");
-
-       if (auctionPayment) {
-         const user = await AsyncStorage.getItem("user");
-         if (user) {
-           const userObj = JSON.parse(user);
-           await paymentService.markAsPaidForAuction(userObj.id, auctionId);
-         }
-         return true;
-       }
-       return false;
-     } catch (error) {
-       console.error("Error checking backend payment status:", error);
-       return false;
-     }
-   };
-
-   // Then add the useEffect separately:
-   useEffect(() => {
-     if (user?.id) {
-       dispatch(checkPaymentStatus(user.id));
-       setHasPaidTax(paidUsers.includes(user.id));
-     }
-   }, [user?.id, paidUsers]);
 
   // Process auction data when it changes
   useEffect(() => {
     if (currentAuction) {
       processAuctionData();
-      checkWinnerPaymentStatus();
+      checkWinnerAndPaymentStatus();
+      checkExpiration();
     }
   }, [currentAuction, user?.id]);
 
@@ -282,39 +217,53 @@ const AuctionDetails = () => {
     };
   }, [paymentDeadline]);
 
-  useEffect(() => {
-    if (currentAuction && user) {
-      checkWinnerAndPaymentStatus();
-    }
-  }, [currentAuction, user]);
-
   const checkWinnerAndPaymentStatus = () => {
     if (!currentAuction || !user) return;
 
-    // Only check if auction is ended
-    if (currentAuction.status === "ended") {
+    console.log("Checking winner and payment status...");
+    console.log("Auction status:", currentAuction?.status);
+    console.log("Auction bidders:", currentAuction?.bidders);
+
+    // Check if auction is ended
+    const isAuctionEnded = currentAuction?.status === "ended";
+    setIsExpired(isAuctionEnded);
+
+    if (isAuctionEnded) {
       // Check if user is the winner
-      const bids = Object.entries(currentAuction.bidders || {});
-      if (bids.length === 0) return;
+      const bids = Object.entries(currentAuction?.bidders || {});
+      console.log("Bids entries:", bids);
 
-      const sortedBids = bids.sort((a, b) => b[1] - a[1]);
-      const winnerId = sortedBids[0][0];
-      const isWinner = winnerId === user.id;
+      if (bids.length > 0) {
+        const sortedBids = bids.sort((a, b) => b[1] - a[1]);
+        const winnerId = sortedBids[0][0];
+        const isWinner = winnerId === user.id;
 
-      setUserWon(isWinner);
+        console.log("Winner ID:", winnerId);
+        console.log("Current user ID:", user.id);
+        console.log("Is winner:", isWinner);
 
-      // Only set payment deadline if user is winner
-      if (isWinner && currentAuction.expireDate) {
-        const expireDate = new Date(currentAuction.expireDate);
-        const deadline = new Date(expireDate.getTime() + 24 * 60 * 60 * 1000);
-        const now = new Date();
+        setUserWon(isWinner);
 
-        if (now <= deadline) {
-          setPaymentDeadline(deadline);
+        // Only set payment deadline if user is winner and auction is not paid
+        if (isWinner && !currentAuction?.isPaid && currentAuction?.expireDate) {
+          const expireDate = new Date(currentAuction?.expireDate);
+          const deadline = new Date(expireDate.getTime() + 24 * 60 * 60 * 1000);
+          const now = new Date();
+
+          console.log("Expire date:", expireDate);
+          console.log("Payment deadline:", deadline);
+          console.log("Now:", now);
+
+          if (now <= deadline) {
+            setPaymentDeadline(deadline);
+          } else {
+            setPaymentDeadline(null);
+          }
         } else {
           setPaymentDeadline(null);
         }
       } else {
+        setUserWon(false);
         setPaymentDeadline(null);
       }
     } else {
@@ -329,7 +278,6 @@ const AuctionDetails = () => {
       const result = await dispatch(fetchReviews(id)).unwrap();
       const reviewsData = result.reviews || {};
 
-      // Convert MultiValueMap to array without timestamps
       const reviewsArray = [];
       const userPromises = [];
 
@@ -344,7 +292,6 @@ const AuctionDetails = () => {
               };
               reviewsArray.push(reviewObj);
 
-              // Fetch user data for this reviewer
               userPromises.push(
                 userService
                   .getUserById(userId)
@@ -358,7 +305,6 @@ const AuctionDetails = () => {
 
       setAuctionReviews(reviewsArray);
 
-      // Fetch all user data
       const userResults = await Promise.all(userPromises);
       const userMap = {};
       const photoMap = {};
@@ -366,13 +312,11 @@ const AuctionDetails = () => {
       userResults.forEach(({ userId, userData }) => {
         if (userData) {
           userMap[userId] = userData;
-          // Preload and cache photo URLs
           if (userData.photoId) {
             const photoUrl = userService.getUserPhotoUrl(
               userId,
               userData.photoId,
             );
-            // Test if image loads
             Image.prefetch(photoUrl).catch(() => {});
             photoMap[userId] = photoUrl;
           }
@@ -382,7 +326,6 @@ const AuctionDetails = () => {
       setReviewUsers(userMap);
       setReviewPhotos(photoMap);
 
-      // Check if current user has a review
       if (user) {
         const userReviews = reviewsArray.filter((r) => r.userId === user.id);
         if (userReviews.length > 0) {
@@ -394,39 +337,26 @@ const AuctionDetails = () => {
     }
   };
 
-  const checkWinnerPaymentStatus = () => {
-    if (!currentAuction || !user) return;
-
-    const bids = Object.entries(currentAuction.bidders || {});
-    if (bids.length === 0) return;
-
-    const sortedBids = bids.sort((a, b) => b[1] - a[1]);
-    const winnerId = sortedBids[0][0];
-    const isWinner = winnerId === user.id;
-
-    setUserWon(isWinner);
-
-    // Check payment deadline (24h from expiration)
-    if (isWinner && isExpired && currentAuction.expireDate) {
-      const expireDate = new Date(currentAuction.expireDate);
-      const deadline = new Date(expireDate.getTime() + 24 * 60 * 60 * 1000);
-      setPaymentDeadline(deadline);
-    }
-  };
-
   const loadAuction = async () => {
     try {
-      await dispatch(fetchAuctionById(id)).unwrap();
+      console.log("Loading auction with ID:", id);
+      const result = await dispatch(fetchAuctionById(id)).unwrap();
+      console.log("Auction loaded:", result);
+      console.log("Auction status:", result?.status);
+      console.log("Auction isPaid:", result?.isPaid);
+      console.log("Auction expireDate:", result?.expireDate);
+      console.log("Auction bidders:", result?.bidders);
     } catch (error) {
+      console.error("Error loading auction:", error);
       Alert.alert("Erreur", "Échec du chargement des détails");
     }
   };
 
   const processAuctionData = async () => {
     // Load auction photos
-    if (currentAuction.photoId?.length > 0) {
-      const photos = currentAuction.photoId.map((photoId) =>
-        auctionService.getAuctionPhotoUrl(currentAuction.id, photoId),
+    if (currentAuction?.photoId?.length > 0) {
+      const photos = currentAuction?.photoId.map((photoId) =>
+        auctionService.getAuctionPhotoUrl(currentAuction?.id, photoId),
       );
       setAuctionPhotos(photos);
     }
@@ -436,11 +366,6 @@ const AuctionDetails = () => {
 
     // Load seller details
     await loadSellerDetails();
-
-    // Calculate time remaining
-    if (currentAuction.expireDate) {
-      checkExpiration();
-    }
   };
 
   const loadBidderNames = async (biddersArray) => {
@@ -464,7 +389,7 @@ const AuctionDetails = () => {
 
   const processBidders = () => {
     if (currentAuction?.bidders) {
-      const biddersArray = Object.entries(currentAuction.bidders)
+      const biddersArray = Object.entries(currentAuction?.bidders)
         .map(([userId, amount]) => ({
           userId,
           amount,
@@ -479,7 +404,7 @@ const AuctionDetails = () => {
         setHighestBid(biddersArray[0].amount);
         setIsHighestBidder(biddersArray[0].userId === user?.id);
       } else {
-        setHighestBid(currentAuction.startingPrice || 0);
+        setHighestBid(currentAuction?.startingPrice || 0);
         setIsHighestBidder(false);
       }
 
@@ -514,7 +439,7 @@ const AuctionDetails = () => {
   const loadSellerDetails = async () => {
     try {
       if (currentAuction?.sellerId) {
-        const seller = await userService.getUserById(currentAuction.sellerId);
+        const seller = await userService.getUserById(currentAuction?.sellerId);
         setSellerDetails(seller);
         if (seller?.photoId) {
           await loadSellerPhoto();
@@ -531,7 +456,7 @@ const AuctionDetails = () => {
     if (!currentAuction?.expireDate) return;
 
     const now = new Date();
-    const expiration = new Date(currentAuction.expireDate);
+    const expiration = new Date(currentAuction?.expireDate);
     const expired = now >= expiration;
 
     setIsExpired(expired);
@@ -551,7 +476,7 @@ const AuctionDetails = () => {
     if (!currentAuction?.expireDate) return;
 
     const now = new Date();
-    const expiration = new Date(currentAuction.expireDate);
+    const expiration = new Date(currentAuction?.expireDate);
 
     if (now >= expiration) {
       setTimeRemaining("Expiré");
@@ -592,7 +517,7 @@ const AuctionDetails = () => {
       return;
     }
 
-    if (currentAuction.sellerId === user.id) {
+    if (currentAuction?.sellerId === user.id) {
       Alert.alert(
         "Action non autorisée",
         "Vous ne pouvez pas enchérir sur votre propre enchère",
@@ -600,7 +525,7 @@ const AuctionDetails = () => {
       return;
     }
 
-    if (isFirstBid && !hasPaidForThisAuction) {
+    if (isFirstBid && !currentAuction?.isPaid) {
       setShowPaymentModal(true);
       return;
     }
@@ -610,18 +535,17 @@ const AuctionDetails = () => {
     setShowBidModal(true);
   };
 
-  const handlePaymentComplete = () => {
-    setHasPaidForThisAuction(true);
+  const handlePaymentComplete = async () => {
     const minBid = highestBid + 1;
     setBidAmount(minBid.toString());
     setShowBidModal(true);
+    await refreshAuction();
   };
 
   const handleAuctionPaymentComplete = async () => {
-    setHasPaidForThisAuction(true);
     Alert.alert("Succès", "Paiement effectué avec succès !");
     setShowAuctionPaymentModal(false);
-    await loadAuction();
+    await refreshAuction();
   };
 
   const submitBid = async () => {
@@ -652,7 +576,7 @@ const AuctionDetails = () => {
 
       setShowBidModal(false);
       setBidAmount("");
-      await dispatch(fetchAuctionById(id)).unwrap();
+      await refreshAuction();
 
       Alert.alert("Succès", "Votre enchère a été placée avec succès");
     } catch (error) {
@@ -725,12 +649,6 @@ const AuctionDetails = () => {
   const handleDeleteReview = async (reviewTextToDelete) => {
     if (!reviewTextToDelete) return;
 
-    console.log("Deleting review:", {
-      auctionId: id,
-      reviewerId: user?.id,
-      review: reviewTextToDelete,
-    });
-
     Alert.alert(
       "Supprimer l'avis",
       "Êtes-vous sûr de vouloir supprimer votre avis ?",
@@ -741,7 +659,7 @@ const AuctionDetails = () => {
           style: "destructive",
           onPress: async () => {
             try {
-              const result = await dispatch(
+              await dispatch(
                 deleteReview({
                   auctionId: id,
                   reviewerId: user.id,
@@ -804,7 +722,7 @@ const AuctionDetails = () => {
 
   const getCategoryInfo = () => {
     if (!currentAuction?.category) return null;
-    return categories[currentAuction.category] || categories.general;
+    return categories[currentAuction?.category] || categories.general;
   };
 
   const getSellerName = () => {
@@ -822,7 +740,7 @@ const AuctionDetails = () => {
     return name.charAt(0).toUpperCase();
   };
 
-  if (loading || !currentAuction) {
+  if (loading && !currentAuction) {
     return (
       <ThemedView safe style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -880,7 +798,7 @@ const AuctionDetails = () => {
               <View
                 style={[
                   styles.imageStatusBadge,
-                  { backgroundColor: getStatusColor(currentAuction.status) },
+                  { backgroundColor: getStatusColor(currentAuction?.status) },
                 ]}
               >
                 <ThemedText style={styles.imageStatusText}>
@@ -929,7 +847,7 @@ const AuctionDetails = () => {
             {/* Title and Category */}
             <View style={styles.titleRow}>
               <ThemedText title style={styles.auctionTitle}>
-                {currentAuction.title}
+                {currentAuction?.title}
               </ThemedText>
             </View>
 
@@ -953,7 +871,7 @@ const AuctionDetails = () => {
                   Prix de départ
                 </ThemedText>
                 <ThemedText title style={styles.price}>
-                  {formatPrice(currentAuction.startingPrice)}
+                  {formatPrice(currentAuction?.startingPrice)}
                 </ThemedText>
               </View>
               {timeRemaining && !isExpired && (
@@ -1020,14 +938,13 @@ const AuctionDetails = () => {
             </View>
 
             {/* Winner Payment Section */}
-            {isExpired && userWon && !hasPaidForThisAuction && (
+            {isExpired && userWon && !currentAuction?.isPaid && (
               <View style={styles.winnerSection}>
                 {paymentDeadline && new Date() <= paymentDeadline && (
                   <>
                     <TouchableOpacity
                       style={styles.paymentButton}
                       onPress={() => setShowAuctionPaymentModal(true)}
-                      disabled={checkingPaymentStatus}
                     >
                       <LinearGradient
                         colors={["#fbbf24", "#f59e0b"]}
@@ -1070,8 +987,8 @@ const AuctionDetails = () => {
               </View>
             )}
 
-            {/* Show paid message only if user has paid */}
-            {isExpired && userWon && hasPaidForThisAuction && (
+            {/* Show paid message only if auction is paid */}
+            {isExpired && userWon && currentAuction?.isPaid && (
               <View style={styles.paidContainer}>
                 <LinearGradient
                   colors={["#4ade80", "#22c55e"]}
@@ -1155,43 +1072,44 @@ const AuctionDetails = () => {
                   Avis ({auctionReviews.length})
                 </ThemedText>
 
-                {/* Review button for ALL users */}
-                <TouchableOpacity
-                  style={styles.addReviewButton}
-                  onPress={() => {
-                    if (!user) {
-                      Alert.alert(
-                        "Connexion requise",
-                        "Veuillez vous connecter pour publier un avis",
-                        [
-                          { text: "Annuler", style: "cancel" },
-                          {
-                            text: "Se connecter",
-                            onPress: () => router.push("/(auth)/login"),
-                          },
-                        ],
-                      );
-                    } else {
-                      // Reset states for adding a new review
-                      setEditingReview(null);
-                      setEditReviewText("");
-                      setReviewText("");
-                      setShowAddReviewModal(true);
-                    }
-                  }}
-                >
-                  <LinearGradient
-                    colors={[Colors.primary, "#764ba2"]}
-                    style={styles.addReviewGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
+                {/* Review button for ALL users - only show if auction is NOT ended */}
+                {!isExpired && (
+                  <TouchableOpacity
+                    style={styles.addReviewButton}
+                    onPress={() => {
+                      if (!user) {
+                        Alert.alert(
+                          "Connexion requise",
+                          "Veuillez vous connecter pour publier un avis",
+                          [
+                            { text: "Annuler", style: "cancel" },
+                            {
+                              text: "Se connecter",
+                              onPress: () => router.push("/(auth)/login"),
+                            },
+                          ],
+                        );
+                      } else {
+                        setEditingReview(null);
+                        setEditReviewText("");
+                        setReviewText("");
+                        setShowAddReviewModal(true);
+                      }
+                    }}
                   >
-                    <Ionicons name="add" size={18} color="#fff" />
-                    <ThemedText style={styles.addReviewText}>
-                      Publier votre avis
-                    </ThemedText>
-                  </LinearGradient>
-                </TouchableOpacity>
+                    <LinearGradient
+                      colors={[Colors.primary, "#764ba2"]}
+                      style={styles.addReviewGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    >
+                      <Ionicons name="add" size={18} color="#fff" />
+                      <ThemedText style={styles.addReviewText}>
+                        Publier votre avis
+                      </ThemedText>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Single Modal for both Add and Edit */}
@@ -1327,7 +1245,6 @@ const AuctionDetails = () => {
                         style={styles.reviewItem}
                       >
                         <View style={styles.reviewHeader}>
-                          {/* User Avatar */}
                           <View style={styles.reviewerAvatarContainer}>
                             {reviewer?.photoId &&
                             reviewPhotos[review.userId] ? (
@@ -1362,13 +1279,11 @@ const AuctionDetails = () => {
                             </ThemedText>
                           </View>
 
-                          {/* Action Buttons for user's own reviews */}
                           {isCurrentUser && (
                             <View style={styles.reviewActionButtons}>
                               <TouchableOpacity
                                 style={styles.reviewActionButton}
                                 onPress={() => {
-                                  // Set editing mode with the review text
                                   setEditingReview(review);
                                   setEditReviewText(review.review);
                                   setShowAddReviewModal(true);
@@ -1450,7 +1365,7 @@ const AuctionDetails = () => {
               >
                 {isExpired
                   ? "Enchère terminée"
-                  : `Se termine : ${formatExpirationDate(currentAuction.expireDate)}`}
+                  : `Se termine : ${formatExpirationDate(currentAuction?.expireDate)}`}
               </ThemedText>
             </View>
 
@@ -1458,7 +1373,7 @@ const AuctionDetails = () => {
             <View style={styles.descriptionSection}>
               <ThemedText style={styles.sectionTitle}>Description</ThemedText>
               <ThemedText style={styles.description}>
-                {currentAuction.description || "Aucune description"}
+                {currentAuction?.description || "Aucune description"}
               </ThemedText>
             </View>
 
@@ -1501,7 +1416,7 @@ const AuctionDetails = () => {
           </ThemedCard>
 
           {/* Bid Button */}
-          {!isExpired && currentAuction.sellerId !== user?.id && (
+          {!isExpired && currentAuction?.sellerId !== user?.id && (
             <TouchableOpacity
               style={[
                 styles.bidButton,
@@ -1641,7 +1556,6 @@ const AuctionDetails = () => {
                 return (
                   <View style={styles.reviewItem}>
                     <View style={styles.reviewHeader}>
-                      {/* User Avatar with Photo */}
                       <View style={styles.reviewerAvatarContainer}>
                         {reviewer?.photoId && reviewPhotos[item.userId] ? (
                           <Image
@@ -1673,7 +1587,6 @@ const AuctionDetails = () => {
                         </ThemedText>
                       </View>
 
-                      {/* Action Buttons for user's own reviews */}
                       {isCurrentUser && (
                         <View style={styles.reviewActionButtons}>
                           <TouchableOpacity

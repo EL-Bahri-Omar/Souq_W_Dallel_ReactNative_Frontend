@@ -80,6 +80,10 @@ function AppContent() {
     if (user.role?.toUpperCase() === "TRANSPORTER") {
       router.replace("/(transporter)/home");
     }
+
+    if (user.role?.toUpperCase() === "ADMIN") {
+      router.replace("/(admin)/dashboard");
+    }
   }, [token, user]);
 
   useEffect(() => {
@@ -115,13 +119,7 @@ function AppContent() {
   const getTabScreens = () => {
     if (isAdmin) {
       return [
-        { name: "index", title: "Accueil", icon: "home" },
         { name: "(dashboard)/profile", title: "Profil", icon: "person" },
-        {
-          name: "(dashboard)/notifications",
-          title: "Notifications",
-          icon: "notifications",
-        },
         { name: "(admin)", title: "Dashboard", icon: "stats-chart" },
       ];
     } else if (isTransporter) {
@@ -205,6 +203,12 @@ function AppContent() {
         )}
         {isAdmin && (
           <Tabs.Screen name="(transporter)/home" options={{ href: null }} />
+        )}
+        {isAdmin && (
+          <Tabs.Screen name="index" options={{ href: null }} />
+        )}
+        {isAdmin && (
+          <Tabs.Screen name="(dashboard)/notifications" options={{ href: null }} />
         )}
 
         {/* Hidden screens from Transporter */}

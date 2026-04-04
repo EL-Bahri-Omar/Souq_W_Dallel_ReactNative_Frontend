@@ -54,7 +54,7 @@ const LeftSidebar = ({ visible, onClose }) => {
           id: "admin-dashboard",
           label: "Dashboard Admin",
           icon: "stats-chart-outline",
-          route: "/(admin)",
+          route: "/(admin)/dashboard",
         },
         {
           id: "profile",

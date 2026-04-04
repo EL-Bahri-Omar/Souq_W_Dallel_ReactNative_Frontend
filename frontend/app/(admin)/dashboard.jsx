@@ -1161,7 +1161,7 @@ const AdminDashboard = () => {
               <Ionicons name="people" size={24} color="#f59e0b" />
             </View>
             <View style={styles.statInfo}>
-              <ThemedText style={styles.statTitle}>Dépôts Enchères</ThemedText>
+              <ThemedText style={styles.statTitle}>Dépôts Offres</ThemedText>
               <ThemedText style={styles.statValue}>{formatCurrency(depositStats.bids)}</ThemedText>
             </View>
           </ThemedCard>
@@ -1805,9 +1805,6 @@ const AdminDashboard = () => {
     return (
       <View style={styles.notificationsContainer}>
         <View style={styles.notificationsHeader}>
-          <ThemedText style={styles.notificationsTitle}>
-            Notifications
-          </ThemedText>
           {unreadNotifications.length > 0 && !notificationSelectionMode && (
             <TouchableOpacity onPress={() => setNotificationSelectionMode(true)}>
               <ThemedText style={styles.selectText}>

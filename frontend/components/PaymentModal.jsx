@@ -86,7 +86,6 @@ const PaymentModal = ({ visible, onClose, onPaymentComplete, auctionId }) => {
       } else if (paymentIntent) {
         console.log('Payment successful:', paymentIntent);
         // Mark as paid for this specific auction
-        await paymentService.markAsPaidForAuction(user.id, auctionId);
         Alert.alert('Succès', 'Paiement effectué avec succès !');
         onPaymentComplete();
         onClose();
