@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -6,75 +6,87 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  TextInput
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { CardField, useStripe } from '@stripe/stripe-react-native';
-import ThemedText from './ThemedText';
-import ThemedCard from './ThemedCard';
-import { Colors } from '../constants/Colors';
-import { useAuth } from '../hooks/useAuth';
-import { paymentService } from '../store/services/paymentService';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { CardField, useStripe } from "@stripe/stripe-react-native";
+import ThemedText from "./ThemedText";
+import ThemedCard from "./ThemedCard";
+import { Colors } from "../constants/Colors";
+import { useAuth } from "../hooks/useAuth";
+import { paymentService } from "../store/services/paymentService";
 
-const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, amount }) => {
+const AuctionPaymentModal = ({
+  visible,
+  onClose,
+  onPaymentComplete,
+  auctionId,
+  amount,
+  isCreationFee = true,
+}) => {
   const { confirmPayment } = useStripe();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [cardDetails, setCardDetails] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
   const [initializing, setInitializing] = useState(false);
-  const [timeLeft, setTimeLeft] = useState('24:00:00');
-
-  // Calculate time left (24h from now)
-  React.useEffect(() => {
-    if (!visible) return;
-    
-    const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
-    const timer = setInterval(() => {
-      const now = new Date();
-      const diff = deadline - now;
-      
-      if (diff <= 0) {
-        setTimeLeft('00:00:00');
-        clearInterval(timer);
-        Alert.alert('Délai expiré', 'Le délai de paiement est expiré. L\'enchère sera attribuée au prochain enchérisseur.');
-        onClose();
-      } else {
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        setTimeLeft(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-      }
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [visible]);
 
   const initializePayment = async () => {
+    // Validate amount before proceeding
+    if (!amount || isNaN(amount) || amount <= 0) {
+      console.error("Invalid amount:", amount);
+      Alert.alert("Erreur", "Montant invalide pour le paiement");
+      onClose();
+      return;
+    }
+
     try {
       setInitializing(true);
-      console.log('Creating auction payment intent...');
-      const response = await paymentService.payAuction(auctionId, amount);
-      console.log('Payment intent created:', response.clientSecret);
-      
+      console.log(
+        `Initializing payment for ${isCreationFee ? "creation fees" : "auction"}...`,
+      );
+      console.log(`Amount received: ${amount} TND`);
+
+      let response;
+      if (isCreationFee) {
+        // Convert amount to millimes (Long)
+        const amountInMillimes = Math.round(amount * 1000);
+        console.log(`Converting ${amount} TND to ${amountInMillimes} millimes`);
+
+        if (isNaN(amountInMillimes) || amountInMillimes <= 0) {
+          throw new Error("Invalid amount calculation");
+        }
+
+        response = await paymentService.payCreationFees(
+          auctionId,
+          amountInMillimes,
+        );
+      } else {
+        const amountInMillimes = Math.round(amount * 1000);
+        response = await paymentService.payAuction(auctionId, amountInMillimes);
+      }
+
+      console.log("Payment intent created:", response.clientSecret);
+
       if (response && response.clientSecret) {
         setClientSecret(response.clientSecret);
       } else {
-        Alert.alert('Erreur', 'Réponse de paiement invalide');
+        Alert.alert("Erreur", "Réponse de paiement invalide");
         onClose();
       }
     } catch (error) {
-      console.error('Payment initialization error:', error);
-      Alert.alert('Erreur', error.message || 'Impossible d\'initialiser le paiement');
+      console.error("Payment initialization error:", error);
+      Alert.alert(
+        "Erreur",
+        error.message || "Impossible d'initialiser le paiement",
+      );
       onClose();
     } finally {
       setInitializing(false);
     }
   };
 
-  React.useEffect(() => {
-    if (visible && auctionId && amount) {
+  useEffect(() => {
+    if (visible && auctionId && amount && amount > 0) {
       initializePayment();
     } else {
       setClientSecret(null);
@@ -84,12 +96,12 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
 
   const handlePayPress = async () => {
     if (!cardDetails?.complete) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs de la carte');
+      Alert.alert("Erreur", "Veuillez remplir tous les champs de la carte");
       return;
     }
 
     if (!clientSecret) {
-      Alert.alert('Erreur', 'Paiement non initialisé');
+      Alert.alert("Erreur", "Paiement non initialisé");
       return;
     }
 
@@ -97,29 +109,30 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
 
     try {
       const { error, paymentIntent } = await confirmPayment(clientSecret, {
-        paymentMethodType: 'Card',
+        paymentMethodType: "Card",
         paymentMethodData: {
           billingDetails: {
-            name: user?.firstname && user?.lastname 
-              ? `${user.firstname} ${user.lastname}`
-              : user?.email?.split('@')[0] || 'Client',
+            name:
+              user?.firstname && user?.lastname
+                ? `${user.firstname} ${user.lastname}`
+                : user?.email?.split("@")[0] || "Client",
             email: user?.email,
           },
         },
       });
 
       if (error) {
-        console.error('Payment confirmation error:', error);
-        Alert.alert('Erreur', error.message || 'Échec du paiement');
+        console.error("Payment confirmation error:", error);
+        Alert.alert("Erreur", error.message || "Échec du paiement");
       } else if (paymentIntent) {
-        console.log('Payment successful:', paymentIntent);
-        Alert.alert('Succès', 'Paiement effectué avec succès !');
+        console.log("Payment successful:", paymentIntent);
+        Alert.alert("Succès", "Paiement effectué avec succès !");
         onPaymentComplete();
         onClose();
       }
     } catch (error) {
-      console.error('Payment error:', error);
-      Alert.alert('Erreur', error.message || 'Échec du paiement');
+      console.error("Payment error:", error);
+      Alert.alert("Erreur", error.message || "Échec du paiement");
     } finally {
       setLoading(false);
     }
@@ -136,24 +149,24 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
         <ThemedCard style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
-              Paiement de l'enchère
+              {isCreationFee ? "Frais de création" : "Paiement de l'enchère"}
             </ThemedText>
-            <TouchableOpacity onPress={onClose} disabled={loading || initializing}>
+            <TouchableOpacity
+              onPress={onClose}
+              disabled={loading || initializing}
+            >
               <Ionicons name="close" size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.modalBody}>
-            <View style={styles.timeContainer}>
-              <Ionicons name="time" size={24} color={Colors.warning} />
-              <ThemedText style={styles.timeText}>
-                Temps restant: {timeLeft}
-              </ThemedText>
-            </View>
-
             <View style={styles.amountContainer}>
-              <ThemedText style={styles.amountLabel}>Montant à payer:</ThemedText>
-              <ThemedText style={styles.amountValue}>{amount} TND</ThemedText>
+              <ThemedText style={styles.amountLabel}>
+                Montant à payer:
+              </ThemedText>
+              <ThemedText style={styles.amountValue}>
+                {amount?.toFixed(2) || "0.00"} TND
+              </ThemedText>
             </View>
 
             {initializing ? (
@@ -172,14 +185,14 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
                   <CardField
                     postalCodeEnabled={false}
                     placeholders={{
-                      number: '4242 4242 4242 4242',
+                      number: "4242 4242 4242 4242",
                     }}
                     cardStyle={{
-                      backgroundColor: '#FFFFFF',
-                      textColor: '#000000',
+                      backgroundColor: "#FFFFFF",
+                      textColor: "#000000",
                       borderRadius: 8,
                       fontSize: 14,
-                      placeholderColor: '#999999',
+                      placeholderColor: "#999999",
                     }}
                     style={styles.cardField}
                     onCardChange={(cardDetails) => {
@@ -190,7 +203,11 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
 
                 <View style={styles.cardInfo}>
                   <View style={styles.cardInfoRow}>
-                    <Ionicons name="lock-closed" size={16} color={Colors.primary} />
+                    <Ionicons
+                      name="lock-closed"
+                      size={16}
+                      color={Colors.primary}
+                    />
                     <ThemedText style={styles.cardInfoText}>
                       Paiement sécurisé par Stripe
                     </ThemedText>
@@ -201,7 +218,11 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.payButton, (loading || !cardDetails?.complete) && styles.disabledButton]}
+                  style={[
+                    styles.payButton,
+                    (loading || !cardDetails?.complete) &&
+                      styles.disabledButton,
+                  ]}
                   onPress={handlePayPress}
                   disabled={loading || !cardDetails?.complete}
                 >
@@ -211,7 +232,7 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
                     <>
                       <Ionicons name="card" size={20} color="#fff" />
                       <ThemedText style={styles.payButtonText}>
-                        Payer {amount} TND
+                        Payer {amount?.toFixed(2) || "0.00"} TND
                       </ThemedText>
                     </>
                   )}
@@ -228,64 +249,50 @@ const AuctionPaymentModal = ({ visible, onClose, onPaymentComplete, auctionId, a
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    width: '90%',
+    width: "90%",
     maxWidth: 400,
     padding: 20,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
   modalBody: {
     gap: 20,
   },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 15,
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    gap: 10,
-  },
-  timeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#856404',
-  },
   amountContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     padding: 15,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
   },
   amountLabel: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginBottom: 5,
   },
   amountValue: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.primary,
   },
   loadingContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     padding: 30,
     gap: 15,
   },
@@ -298,49 +305,49 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
-    color: '#333',
+    color: "#333",
   },
   cardField: {
-    width: '100%',
+    width: "100%",
     height: 100,
   },
   cardInfo: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 5,
     marginBottom: 10,
   },
   cardInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 4,
   },
   cardInfoText: {
     fontSize: 12,
     color: Colors.primary,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   cardInfoSubtext: {
     fontSize: 10,
-    color: '#999',
-    textAlign: 'center',
+    color: "#999",
+    textAlign: "center",
   },
   payButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
     marginTop: 10,
   },
   payButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   disabledButton: {
     opacity: 0.6,

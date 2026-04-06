@@ -1,58 +1,70 @@
-import { useState, useRef } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  ScrollView, 
-  Alert, 
-  TouchableOpacity, 
+import React, { useState, useRef, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
   Image,
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Modal
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { useColorScheme } from 'react-native';
-import ThemedView from '../components/ThemedView';
-import ThemedText from '../components/ThemedText';
-import ThemedButton from '../components/ThemedButton';
-import ThemedTextInput from '../components/ThemedTextInput';
-import ThemedCard from '../components/ThemedCard';
-import Spacer from '../components/Spacer';
-import { useAuth } from '../hooks/useAuth';
-import { useAppDispatch } from '../hooks/useAppDispatch';
-import { createAuction } from '../store/slices/auctionSlice';
-import { Colors } from '../constants/Colors';
+  Modal,
+  ActivityIndicator,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useColorScheme } from "react-native";
+import ThemedView from "../components/ThemedView";
+import ThemedText from "../components/ThemedText";
+import ThemedButton from "../components/ThemedButton";
+import ThemedCard from "../components/ThemedCard";
+import Spacer from "../components/Spacer";
+import AuctionPaymentModal from "../components/AuctionPaymentModal";
+import { useAuth } from "../hooks/useAuth";
+import { useAppDispatch } from "../hooks/useAppDispatch";
+import { createAuction } from "../store/slices/auctionSlice";
+import { auctionService } from "../store/services/auctionService";
+import { Colors } from "../constants/Colors";
 
 const categories = [
-  { id: 'electronics', label: 'Électronique', icon: 'tv-outline' },
-  { id: 'furniture', label: 'Meubles', icon: 'bed-outline' },
-  { id: 'vehicles', label: 'Véhicules', icon: 'car-outline' },
-  { id: 'real-estate', label: 'Immobilier', icon: 'home-outline' },
-  { id: 'collectibles', label: 'Collection', icon: 'albums-outline' },
-  { id: 'art', label: 'Art', icon: 'color-palette-outline' },
-  { id: 'jewelry', label: 'Bijoux', icon: 'diamond-outline' },
-  { id: 'clothing', label: 'Vêtements', icon: 'shirt-outline' },
-  { id: 'sports', label: 'Sports', icon: 'basketball-outline' },
-  { id: 'general', label: 'Général', icon: 'apps-outline' },
+  { id: "electronics", label: "Électronique", icon: "tv-outline" },
+  { id: "furniture", label: "Meubles", icon: "bed-outline" },
+  { id: "vehicles", label: "Véhicules", icon: "car-outline" },
+  { id: "real-estate", label: "Immobilier", icon: "home-outline" },
+  { id: "collectibles", label: "Collection", icon: "albums-outline" },
+  { id: "art", label: "Art", icon: "color-palette-outline" },
+  { id: "jewelry", label: "Bijoux", icon: "diamond-outline" },
+  { id: "clothing", label: "Vêtements", icon: "shirt-outline" },
+  { id: "sports", label: "Sports", icon: "basketball-outline" },
+  { id: "general", label: "Général", icon: "apps-outline" },
 ];
 
 const durationOptions = [
-  { id: '1', label: '1 Jour', hours: 24, color: '#4ade80' },
-  { id: '3', label: '3 Jours', hours: 72, color: '#3b82f6' },
-  { id: '7', label: '7 Jours', hours: 168, color: '#8b5cf6' },
-  { id: '14', label: '14 Jours', hours: 336, color: '#ec4899' },
-  { id: 'custom', label: 'Personnalisé', hours: null, color: '#f59e0b' },
+  { id: "1", label: "1 Jour", hours: 24, color: "#4ade80" },
+  { id: "3", label: "3 Jours", hours: 72, color: "#3b82f6" },
+  { id: "7", label: "7 Jours", hours: 168, color: "#8b5cf6" },
+  { id: "14", label: "14 Jours", hours: 336, color: "#ec4899" },
+  { id: "custom", label: "Personnalisé", hours: null, color: "#f59e0b" },
 ];
 
 const months = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
 ];
 
-const daysOfWeek = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'];
+const daysOfWeek = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
 
 const CreateAuction = () => {
   const router = useRouter();
@@ -60,80 +72,94 @@ const CreateAuction = () => {
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
-  
+
   // Form state
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    startingPrice: '',
-    category: 'general',
+    title: "",
+    description: "",
+    startingPrice: "",
+    category: "general",
   });
-  
+
   // Date state
   const [expirationDate, setExpirationDate] = useState(
-    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   );
-  
+
   const [errors, setErrors] = useState({});
   const [selectedImages, setSelectedImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
-  const [selectedDuration, setSelectedDuration] = useState('7');
+  const [selectedDuration, setSelectedDuration] = useState("7");
   const [showScrollIndicator, setShowScrollIndicator] = useState(true);
-  
+  const [showPaymentConfirmationModal, setShowPaymentConfirmationModal] =
+    useState(false);
+  const [showAuctionPaymentModal, setShowAuctionPaymentModal] = useState(false);
+  const [pendingAuctionId, setPendingAuctionId] = useState(null);
+  const [pendingStartingPrice, setPendingStartingPrice] = useState(0);
+  const [feeAmount, setFeeAmount] = useState(0);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+
   // Calendar state
-  const [tempDate, setTempDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  const [tempDate, setTempDate] = useState(
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  );
   const [selectedHour, setSelectedHour] = useState(12);
   const [selectedMinute, setSelectedMinute] = useState(0);
-  const [selectedAmPm, setSelectedAmPm] = useState('PM');
+  const [selectedAmPm, setSelectedAmPm] = useState("PM");
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
-  // Reset form function
   const resetForm = () => {
     setFormData({
-      title: '',
-      description: '',
-      startingPrice: '',
-      category: 'general',
+      title: "",
+      description: "",
+      startingPrice: "",
+      category: "general",
     });
     setExpirationDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     setSelectedImages([]);
     setErrors({});
-    setSelectedDuration('7');
-    
-    // Reset calendar state
+    setSelectedDuration("7");
+
     const defaultDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     setTempDate(defaultDate);
     setSelectedHour(defaultDate.getHours() % 12 || 12);
     setSelectedMinute(defaultDate.getMinutes());
-    setSelectedAmPm(defaultDate.getHours() >= 12 ? 'PM' : 'AM');
+    setSelectedAmPm(defaultDate.getHours() >= 12 ? "PM" : "AM");
     setCurrentMonth(defaultDate.getMonth());
     setCurrentYear(defaultDate.getFullYear());
   };
 
-  // Generate calendar days
+  const deleteUnpaidAuction = async () => {
+    if (!pendingAuctionId) return;
+    try {
+      console.log("Deleting unpaid auction:", pendingAuctionId);
+      await auctionService.deleteAuction(pendingAuctionId);
+      console.log("Successfully deleted unpaid auction");
+    } catch (error) {
+      console.error("Error deleting unpaid auction:", error);
+    }
+  };
+
   const getDaysInMonth = (month, year) => {
     return new Date(year, month + 1, 0).getDate();
   };
 
   const getFirstDayOfMonth = (month, year) => {
     const day = new Date(year, month, 1).getDay();
-    // Convert Sunday (0) to Monday (0) format
     return day === 0 ? 6 : day - 1;
   };
 
   const generateCalendarDays = () => {
     const daysInMonth = getDaysInMonth(currentMonth, currentYear);
     const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
-    
+
     const days = [];
-    // Add empty cells for days before the first day of month
     for (let i = 0; i < firstDay; i++) {
-      days.push({ day: '', empty: true });
+      days.push({ day: "", empty: true });
     }
-    // Add actual days
     for (let i = 1; i <= daysInMonth; i++) {
       days.push({ day: i, empty: false });
     }
@@ -160,18 +186,20 @@ const CreateAuction = () => {
 
   const handleSelectDate = (day) => {
     const newDate = new Date(
-      currentYear, 
-      currentMonth, 
-      day, 
-      selectedAmPm === 'PM' && selectedHour < 12 ? selectedHour + 12 : 
-      selectedAmPm === 'AM' && selectedHour === 12 ? 0 : selectedHour, 
-      selectedMinute
+      currentYear,
+      currentMonth,
+      day,
+      selectedAmPm === "PM" && selectedHour < 12
+        ? selectedHour + 12
+        : selectedAmPm === "AM" && selectedHour === 12
+          ? 0
+          : selectedHour,
+      selectedMinute,
     );
     setTempDate(newDate);
-    
-    // Optional haptic feedback
-    if (Platform.OS === 'ios') {
-      const Haptic = require('expo-haptics');
+
+    if (Platform.OS === "ios") {
+      const Haptic = require("expo-haptics");
       Haptic.impactAsync(Haptic.ImpactFeedbackStyle.Light);
     }
   };
@@ -181,7 +209,6 @@ const CreateAuction = () => {
     if (newHour < 1) newHour = 12;
     if (newHour > 12) newHour = 1;
     setSelectedHour(newHour);
-    
     updateTempDateWithTime(newHour, selectedMinute, selectedAmPm);
   };
 
@@ -190,7 +217,6 @@ const CreateAuction = () => {
     if (newMinute < 0) newMinute = 59;
     if (newMinute > 59) newMinute = 0;
     setSelectedMinute(newMinute);
-    
     updateTempDateWithTime(selectedHour, newMinute, selectedAmPm);
   };
 
@@ -202,40 +228,42 @@ const CreateAuction = () => {
   const updateTempDateWithTime = (hour, minute, amPm) => {
     const newDate = new Date(tempDate);
     let hours24 = hour;
-    if (amPm === 'PM' && hour < 12) hours24 = hour + 12;
-    if (amPm === 'AM' && hour === 12) hours24 = 0;
-    
+    if (amPm === "PM" && hour < 12) hours24 = hour + 12;
+    if (amPm === "AM" && hour === 12) hours24 = 0;
+
     newDate.setHours(hours24);
     newDate.setMinutes(minute);
     setTempDate(newDate);
   };
 
   const handleDateConfirm = () => {
-    // Ensure date is in the future
     const now = new Date();
     if (tempDate <= now) {
-      Alert.alert('Date invalide', 'La date d\'expiration doit être dans le futur');
+      Alert.alert(
+        "Date invalide",
+        "La date d'expiration doit être dans le futur",
+      );
       return;
     }
-    
-    console.log('Setting expiration date to:', tempDate);
-    console.log('ISO string:', tempDate.toISOString());
-    
+
     setExpirationDate(tempDate);
-    setSelectedDuration('custom');
+    setSelectedDuration("custom");
     setShowDatePickerModal(false);
   };
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin d\'accéder à votre galerie pour uploader des photos.');
+
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission requise",
+        "Nous avons besoin d'accéder à votre galerie pour uploader des photos.",
+      );
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
+      mediaTypes: ["images", "videos"],
       allowsMultipleSelection: true,
       allowsEditing: false,
       quality: 0.8,
@@ -245,7 +273,10 @@ const CreateAuction = () => {
     if (!result.canceled && result.assets) {
       const newImages = [...selectedImages, ...result.assets];
       if (newImages.length > 10) {
-        Alert.alert('Limite dépassée', 'Vous ne pouvez uploader que 10 images maximum.');
+        Alert.alert(
+          "Limite dépassée",
+          "Vous ne pouvez uploader que 10 images maximum.",
+        );
         setSelectedImages(newImages.slice(0, 10));
       } else {
         setSelectedImages(newImages);
@@ -261,98 +292,143 @@ const CreateAuction = () => {
 
   const handleScroll = (event) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
-    const isAtEnd = contentOffset.x + layoutMeasurement.width >= contentSize.width - 20;
+    const isAtEnd =
+      contentOffset.x + layoutMeasurement.width >= contentSize.width - 20;
     setShowScrollIndicator(!isAtEnd);
   };
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.title.trim()) {
-      newErrors.title = 'Le titre est requis';
+      newErrors.title = "Le titre est requis";
     }
-    
+
     if (!formData.description.trim()) {
-      newErrors.description = 'La description est requise';
+      newErrors.description = "La description est requise";
     }
-    
+
     if (!formData.startingPrice.trim()) {
-      newErrors.startingPrice = 'Le prix de départ est requis';
-    } else if (isNaN(formData.startingPrice) || parseFloat(formData.startingPrice) <= 0) {
-      newErrors.startingPrice = 'Le prix doit être un nombre positif';
+      newErrors.startingPrice = "Le prix de départ est requis";
+    } else if (
+      isNaN(formData.startingPrice) ||
+      parseFloat(formData.startingPrice) <= 0
+    ) {
+      newErrors.startingPrice = "Le prix doit être un nombre positif";
     }
-    
+
     if (!formData.category) {
-      newErrors.category = 'La catégorie est requise';
+      newErrors.category = "La catégorie est requise";
     }
-    
-    // Validate expiration date is in the future
+
     const now = new Date();
     if (expirationDate <= now) {
-      newErrors.expirationDate = 'La date d\'expiration doit être dans le futur';
+      newErrors.expirationDate = "La date d'expiration doit être dans le futur";
     }
-    
+
     if (selectedImages.length === 0) {
-      newErrors.images = 'Au moins une image est requise';
+      newErrors.images = "Au moins une image est requise";
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
+  const handleCreateAuction = async () => {
     if (!validateForm()) {
-      Alert.alert('Erreur de validation', 'Veuillez corriger les erreurs dans le formulaire');
+      Alert.alert(
+        "Erreur de validation",
+        "Veuillez corriger les erreurs dans le formulaire",
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      // Make sure expirationDate is properly set
-      console.log('Expiration date before sending:', expirationDate);
-      console.log('Expiration date ISO string:', expirationDate.toISOString());
-      
       const auctionData = {
         title: formData.title,
         description: formData.description,
         startingPrice: parseFloat(formData.startingPrice),
         category: formData.category,
         sellerId: user.id,
-        expireDate: expirationDate, // Send the Date object directly
+        expireDate: expirationDate,
       };
 
-      console.log('Submitting auction with data:', auctionData);
+      const result = await dispatch(
+        createAuction({
+          auctionData,
+          photoFiles: selectedImages,
+          userId: user.id,
+        }),
+      ).unwrap();
 
-      await dispatch(createAuction({
-        auctionData,
-        photoFiles: selectedImages,
-        userId: user.id
-      })).unwrap();
-      
-      resetForm();
-      
-      Alert.alert(
-        'Succès',
-        'Enchère créée avec succès !',
-        [{ 
-          text: 'OK', 
-          onPress: () => router.replace('/')
-        }]
-      );
-      
+      setPendingAuctionId(result.id);
+      setPendingStartingPrice(auctionData.startingPrice);
+      const calculatedFee = auctionData.startingPrice * 0.05;
+      setFeeAmount(calculatedFee);
+      setShowPaymentConfirmationModal(true);
     } catch (error) {
-      console.error('Create auction error:', error);
-      Alert.alert('Erreur', error.message || 'Échec de la création de l\'enchère.');
+      console.error("Create auction error:", error);
+      Alert.alert(
+        "Erreur",
+        error.message || "Échec de la création de l'enchère.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCancelPayment = async () => {
+    setShowPaymentConfirmationModal(false);
+    await deleteUnpaidAuction();
+    setPendingAuctionId(null);
+    setPendingStartingPrice(0);
+    setFeeAmount(0);
+  };
+
+  const handleConfirmPayment = () => {
+    setShowPaymentConfirmationModal(false);
+    setShowAuctionPaymentModal(true);
+  };
+
+  const handleAuctionPaymentComplete = async () => {
+    setPaymentCompleted(true);
+    setShowAuctionPaymentModal(false);
+    Alert.alert(
+      "Succès",
+      "Paiement effectué avec succès ! Votre enchère a été créée et est en attente d'approbation.",
+      [{ text: "OK", onPress: () => router.replace("/") }],
+    );
+    resetForm();
+    setPendingAuctionId(null);
+    setPendingStartingPrice(0);
+    setFeeAmount(0);
+  };
+
+  // NEW: Just close the modal without deleting (for when user manually closes the payment modal)
+  const handleAuctionPaymentModalClose = () => {
+    setShowAuctionPaymentModal(false);
+    // Don't delete the auction here - user might want to try payment again
+  };
+
+  // Keep this for when user explicitly cancels from the payment modal
+  const handleAuctionPaymentCancel = async () => {
+    setShowAuctionPaymentModal(false);
+    await deleteUnpaidAuction();
+    setPendingAuctionId(null);
+    setPendingStartingPrice(0);
+    setFeeAmount(0);
+    Alert.alert(
+      "Paiement annulé",
+      "Vous pouvez reprendre la création d'enchère quand vous voulez.",
+    );
+  };
+
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
 
@@ -360,41 +436,41 @@ const CreateAuction = () => {
     setSelectedDuration(duration.id);
     if (duration.hours) {
       const newDate = new Date(Date.now() + duration.hours * 60 * 60 * 1000);
-      console.log('Setting expiration date from duration:', newDate);
       setExpirationDate(newDate);
       setTempDate(newDate);
-      
-      // Update time picker values
+
       const hours24 = newDate.getHours();
       setSelectedHour(hours24 % 12 || 12);
       setSelectedMinute(newDate.getMinutes());
-      setSelectedAmPm(hours24 >= 12 ? 'PM' : 'AM');
+      setSelectedAmPm(hours24 >= 12 ? "PM" : "AM");
       setCurrentMonth(newDate.getMonth());
       setCurrentYear(newDate.getFullYear());
     } else {
-      // For custom, open date picker modal
       setTempDate(expirationDate);
-      
+
       const hours24 = expirationDate.getHours();
       setSelectedHour(hours24 % 12 || 12);
       setSelectedMinute(expirationDate.getMinutes());
-      setSelectedAmPm(hours24 >= 12 ? 'PM' : 'AM');
+      setSelectedAmPm(hours24 >= 12 ? "PM" : "AM");
       setCurrentMonth(expirationDate.getMonth());
       setCurrentYear(expirationDate.getFullYear());
-      
+
       setShowDatePickerModal(true);
     }
   };
 
   const formatExpirationDate = (date) => {
-    if (!date) return 'Sélectionner une date';
-    return date.toLocaleDateString('fr-FR') + ' à ' + 
-           date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (!date) return "Sélectionner une date";
+    return (
+      date.toLocaleDateString("fr-FR") +
+      " à " +
+      date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    );
   };
 
   const getCategoryLabel = () => {
-    const category = categories.find(c => c.id === formData.category);
-    return category ? category.label : 'Sélectionner une catégorie';
+    const category = categories.find((c) => c.id === formData.category);
+    return category ? category.label : "Sélectionner une catégorie";
   };
 
   const getDaysRemaining = (date) => {
@@ -408,20 +484,26 @@ const CreateAuction = () => {
 
   return (
     <ThemedView safe style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           <Spacer height={10} />
-          
-          {/* Header */}
+
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={theme.iconColorFocused} />
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Ionicons
+                name="arrow-back"
+                size={24}
+                color={theme.iconColorFocused}
+              />
             </TouchableOpacity>
             <ThemedText title style={styles.headerTitle}>
               Créer une enchère
@@ -439,57 +521,72 @@ const CreateAuction = () => {
                     Images ({selectedImages.length}/10)
                   </ThemedText>
                 </View>
-                
+
                 {errors.images && (
                   <View style={styles.errorContainer}>
-                    <Ionicons name="alert-circle" size={16} color={Colors.warning} />
-                    <ThemedText style={styles.errorText}>{errors.images}</ThemedText>
+                    <Ionicons
+                      name="alert-circle"
+                      size={16}
+                      color={Colors.warning}
+                    />
+                    <ThemedText style={styles.errorText}>
+                      {errors.images}
+                    </ThemedText>
                   </View>
                 )}
-                
+
                 <View style={styles.imageScrollContainer}>
-                  <ScrollView 
-                    horizontal 
+                  <ScrollView
+                    horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.imageScroll}
                     onScroll={handleScroll}
                     scrollEventThrottle={16}
                   >
                     <View style={styles.imageGrid}>
-                      {/* Gallery Button */}
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.galleryButton}
                         onPress={pickImages}
                         disabled={selectedImages.length >= 10}
                       >
-                        <Ionicons name="images" size={30} color={Colors.primary} />
+                        <Ionicons
+                          name="images"
+                          size={30}
+                          color={Colors.primary}
+                        />
                         <ThemedText style={styles.galleryButtonText}>
                           Galerie
                         </ThemedText>
                       </TouchableOpacity>
-                      
-                      {/* Selected Images */}
+
                       {selectedImages.map((image, index) => (
                         <View key={index} style={styles.imageContainer}>
-                          <Image 
-                            source={{ uri: image.uri }} 
+                          <Image
+                            source={{ uri: image.uri }}
                             style={styles.selectedImage}
                           />
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             style={styles.removeImageButton}
                             onPress={() => removeImage(index)}
                           >
-                            <Ionicons name="close-circle" size={20} color={Colors.warning} />
+                            <Ionicons
+                              name="close-circle"
+                              size={20}
+                              color={Colors.warning}
+                            />
                           </TouchableOpacity>
                         </View>
                       ))}
                     </View>
                   </ScrollView>
-                  
-                  {/* Scroll Indicator */}
+
                   {showScrollIndicator && selectedImages.length > 3 && (
                     <View style={styles.scrollIndicator}>
-                      <Ionicons name="arrow-forward-circle" size={24} color={Colors.primary} />
+                      <Ionicons
+                        name="arrow-forward-circle"
+                        size={24}
+                        color={Colors.primary}
+                      />
                     </View>
                   )}
                 </View>
@@ -498,70 +595,110 @@ const CreateAuction = () => {
               {/* Basic Info */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="information-circle" size={22} color={Colors.primary} />
+                  <Ionicons
+                    name="information-circle"
+                    size={22}
+                    color={Colors.primary}
+                  />
                   <ThemedText style={styles.sectionTitle}>
                     Informations
                   </ThemedText>
                 </View>
-                
+
                 <View style={styles.inputGroup}>
                   <View style={styles.inputWrapper}>
-                    <Ionicons name="pencil" size={18} color={Colors.primary} style={styles.inputIcon} />
+                    <Ionicons
+                      name="pencil"
+                      size={18}
+                      color={Colors.primary}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
                       style={[styles.input, errors.title && styles.inputError]}
                       placeholder="Titre de l'enchère"
                       placeholderTextColor="#999"
                       value={formData.title}
-                      onChangeText={(value) => handleChange('title', value)}
+                      onChangeText={(value) => handleChange("title", value)}
                       maxLength={100}
                     />
                   </View>
                   {errors.title && (
-                    <ThemedText style={styles.errorText}>{errors.title}</ThemedText>
+                    <ThemedText style={styles.errorText}>
+                      {errors.title}
+                    </ThemedText>
                   )}
 
                   <View style={styles.inputWrapper}>
-                    <Ionicons name="document-text" size={18} color={Colors.primary} style={styles.inputIcon} />
+                    <Ionicons
+                      name="document-text"
+                      size={18}
+                      color={Colors.primary}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
-                      style={[styles.textArea, errors.description && styles.inputError]}
+                      style={[
+                        styles.textArea,
+                        errors.description && styles.inputError,
+                      ]}
                       placeholder="Description détaillée de l'article"
                       placeholderTextColor="#999"
                       value={formData.description}
-                      onChangeText={(value) => handleChange('description', value)}
+                      onChangeText={(value) =>
+                        handleChange("description", value)
+                      }
                       multiline
                       numberOfLines={4}
                       maxLength={1000}
                     />
                   </View>
                   {errors.description && (
-                    <ThemedText style={styles.errorText}>{errors.description}</ThemedText>
+                    <ThemedText style={styles.errorText}>
+                      {errors.description}
+                    </ThemedText>
                   )}
 
                   <View style={styles.inputWrapper}>
-                    <Ionicons name="cash" size={18} color={Colors.primary} style={styles.inputIcon} />
+                    <Ionicons
+                      name="cash"
+                      size={18}
+                      color={Colors.primary}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
-                      style={[styles.input, errors.startingPrice && styles.inputError]}
+                      style={[
+                        styles.input,
+                        errors.startingPrice && styles.inputError,
+                      ]}
                       placeholder="Prix de départ (TND)"
                       placeholderTextColor="#999"
                       keyboardType="decimal-pad"
                       value={formData.startingPrice}
-                      onChangeText={(value) => handleChange('startingPrice', value)}
+                      onChangeText={(value) =>
+                        handleChange("startingPrice", value)
+                      }
                     />
                   </View>
                   {errors.startingPrice && (
-                    <ThemedText style={styles.errorText}>{errors.startingPrice}</ThemedText>
+                    <ThemedText style={styles.errorText}>
+                      {errors.startingPrice}
+                    </ThemedText>
                   )}
 
-                  {/* Category Picker */}
                   <TouchableOpacity
-                    style={[styles.pickerButton, errors.category && styles.inputError]}
+                    style={[
+                      styles.pickerButton,
+                      errors.category && styles.inputError,
+                    ]}
                     onPress={() => setShowCategoryModal(true)}
                   >
                     <View style={styles.pickerButtonContent}>
-                      <Ionicons 
-                        name={categories.find(c => c.id === formData.category)?.icon || 'apps-outline'} 
-                        size={20} 
-                        color={Colors.primary} 
+                      <Ionicons
+                        name={
+                          categories.find((c) => c.id === formData.category)
+                            ?.icon || "apps-outline"
+                        }
+                        size={20}
+                        color={Colors.primary}
                       />
                       <ThemedText style={styles.pickerButtonText}>
                         {getCategoryLabel()}
@@ -570,35 +707,44 @@ const CreateAuction = () => {
                     <Ionicons name="chevron-down" size={20} color="#666" />
                   </TouchableOpacity>
                   {errors.category && (
-                    <ThemedText style={styles.errorText}>{errors.category}</ThemedText>
+                    <ThemedText style={styles.errorText}>
+                      {errors.category}
+                    </ThemedText>
                   )}
 
-                  {/* Expiration Time */}
                   <View style={styles.expirationSection}>
                     <View style={styles.expirationHeader}>
                       <Ionicons name="time" size={20} color={Colors.primary} />
-                      <ThemedText style={styles.expirationHeaderText}>Durée de l'enchère</ThemedText>
+                      <ThemedText style={styles.expirationHeaderText}>
+                        Durée de l'enchère
+                      </ThemedText>
                     </View>
-                    
-                    {/* Duration Options */}
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.durationScroll}>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.durationScroll}
+                    >
                       <View style={styles.durationContainer}>
-                        {durationOptions.map(duration => (
+                        {durationOptions.map((duration) => (
                           <TouchableOpacity
                             key={duration.id}
                             style={[
                               styles.durationButton,
-                              selectedDuration === duration.id && { 
+                              selectedDuration === duration.id && {
                                 backgroundColor: duration.color,
-                                borderColor: duration.color 
-                              }
+                                borderColor: duration.color,
+                              },
                             ]}
                             onPress={() => handleDurationSelect(duration)}
                           >
-                            <ThemedText style={[
-                              styles.durationButtonText,
-                              selectedDuration === duration.id && styles.durationButtonTextActive
-                            ]}>
+                            <ThemedText
+                              style={[
+                                styles.durationButtonText,
+                                selectedDuration === duration.id &&
+                                  styles.durationButtonTextActive,
+                              ]}
+                            >
                               {duration.label}
                             </ThemedText>
                           </TouchableOpacity>
@@ -606,15 +752,24 @@ const CreateAuction = () => {
                       </View>
                     </ScrollView>
 
-                    {/* Selected Date Display */}
                     <TouchableOpacity
                       style={styles.selectedDateContainer}
-                      onPress={() => handleDurationSelect(durationOptions.find(d => d.id === 'custom'))}
+                      onPress={() =>
+                        handleDurationSelect(
+                          durationOptions.find((d) => d.id === "custom"),
+                        )
+                      }
                     >
                       <View style={styles.dateInfo}>
-                        <Ionicons name="calendar" size={20} color={Colors.primary} />
+                        <Ionicons
+                          name="calendar"
+                          size={20}
+                          color={Colors.primary}
+                        />
                         <View style={styles.dateTextContainer}>
-                          <ThemedText style={styles.dateLabel}>Se termine le</ThemedText>
+                          <ThemedText style={styles.dateLabel}>
+                            Se termine le
+                          </ThemedText>
                           <ThemedText style={styles.dateValue}>
                             {formatExpirationDate(expirationDate)}
                           </ThemedText>
@@ -626,9 +781,11 @@ const CreateAuction = () => {
                         </ThemedText>
                       </View>
                     </TouchableOpacity>
-                    
+
                     {errors.expirationDate && (
-                      <ThemedText style={styles.errorText}>{errors.expirationDate}</ThemedText>
+                      <ThemedText style={styles.errorText}>
+                        {errors.expirationDate}
+                      </ThemedText>
                     )}
                   </View>
                 </View>
@@ -637,29 +794,9 @@ const CreateAuction = () => {
 
             <Spacer height={30} />
 
-            {/* Fee Information Banner */}
-            <View style={styles.feeInfoBanner}>
-              <View style={styles.feeInfoHeader}>
-                <Ionicons name="information-circle" size={22} color="#856404" />
-                <ThemedText style={styles.feeInfoTitle}>
-                  Information importante
-                </ThemedText>
-              </View>
-              <ThemedText style={styles.feeInfoText}>
-                Lorsque votre enchère est gagnée, une commission de 5% sur le montant final sera prélevée par la plateforme.
-                Cette commission est automatiquement déduite du paiement effectué par l'acheteur.
-              </ThemedText>
-              <View style={styles.feeInfoHighlight}>
-                <Ionicons name="cash-outline" size={16} color="#856404" />
-                <ThemedText style={styles.feeInfoHighlightText}>
-                  Exemple : Pour une enchère gagnée à 1000 TND, la commission sera de 50 TND
-                </ThemedText>
-              </View>
-            </View>
-
             <View style={styles.buttonsContainer}>
               <ThemedButton
-                onPress={handleSubmit}
+                onPress={handleCreateAuction}
                 disabled={loading}
                 style={[styles.submitButton, loading && styles.disabledButton]}
               >
@@ -667,12 +804,16 @@ const CreateAuction = () => {
                   {loading ? (
                     <>
                       <Ionicons name="time-outline" size={22} color="#fff" />
-                      <ThemedText style={styles.buttonText}>Création...</ThemedText>
+                      <ThemedText style={styles.buttonText}>
+                        Création...
+                      </ThemedText>
                     </>
                   ) : (
                     <>
                       <Ionicons name="hammer" size={22} color="#fff" />
-                      <ThemedText style={styles.buttonText}>Créer l'enchère</ThemedText>
+                      <ThemedText style={styles.buttonText}>
+                        Créer l'enchère
+                      </ThemedText>
                     </>
                   )}
                 </View>
@@ -686,7 +827,9 @@ const CreateAuction = () => {
               >
                 <View style={styles.buttonContent}>
                   <Ionicons name="close-circle" size={22} color={theme.text} />
-                  <ThemedText style={styles.cancelButtonText}>Annuler</ThemedText>
+                  <ThemedText style={styles.cancelButtonText}>
+                    Annuler
+                  </ThemedText>
                 </View>
               </TouchableOpacity>
             </View>
@@ -695,6 +838,88 @@ const CreateAuction = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Payment Confirmation Modal */}
+      <Modal
+        visible={showPaymentConfirmationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCancelPayment}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.paymentConfirmModal}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="cash" size={32} color={Colors.primary} />
+              <ThemedText style={styles.modalTitle}>
+                Frais de création
+              </ThemedText>
+            </View>
+
+            <View style={styles.paymentInfo}>
+              <ThemedText style={styles.paymentInfoText}>
+                Pour créer votre enchère, vous devez payer les frais de
+                plateforme de 5% du prix de départ.
+              </ThemedText>
+
+              <View style={styles.feeDetails}>
+                <View style={styles.feeRow}>
+                  <ThemedText style={styles.feeLabel}>
+                    Prix de départ:
+                  </ThemedText>
+                  <ThemedText style={styles.feeValue}>
+                    {pendingStartingPrice} TND
+                  </ThemedText>
+                </View>
+                <View style={styles.feeRow}>
+                  <ThemedText style={styles.feeLabel}>Frais (5%):</ThemedText>
+                  <ThemedText style={styles.feeHighlight}>
+                    {feeAmount.toFixed(2)} TND
+                  </ThemedText>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.feeRow}>
+                  <ThemedText style={styles.feeLabelTotal}>
+                    Total à payer:
+                  </ThemedText>
+                  <ThemedText style={styles.feeValueTotal}>
+                    {feeAmount.toFixed(2)} TND
+                  </ThemedText>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelModalButton]}
+                onPress={handleCancelPayment}
+              >
+                <ThemedText style={styles.cancelModalButtonText}>
+                  Annuler
+                </ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmModalButton]}
+                onPress={handleConfirmPayment}
+              >
+                <ThemedText style={styles.confirmModalButtonText}>
+                  Payer
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Auction Payment Modal */}
+      <AuctionPaymentModal
+        visible={showAuctionPaymentModal}
+        onClose={handleAuctionPaymentModalClose}
+        onPaymentComplete={handleAuctionPaymentComplete}
+        auctionId={pendingAuctionId}
+        amount={feeAmount}
+        isCreationFee={true}
+      />
 
       {/* Category Selection Modal */}
       <Modal
@@ -709,44 +934,62 @@ const CreateAuction = () => {
               <ThemedText style={styles.modalTitle}>
                 Choisir une catégorie
               </ThemedText>
-              <TouchableOpacity onPress={() => setShowCategoryModal(false)} style={styles.modalCloseButton}>
+              <TouchableOpacity
+                onPress={() => setShowCategoryModal(false)}
+                style={styles.modalCloseButton}
+              >
                 <Ionicons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {categories.map(category => (
+              {categories.map((category) => (
                 <TouchableOpacity
                   key={category.id}
                   style={[
                     styles.categoryItem,
-                    formData.category === category.id && styles.categoryItemActive
+                    formData.category === category.id &&
+                      styles.categoryItemActive,
                   ]}
                   onPress={() => {
-                    handleChange('category', category.id);
+                    handleChange("category", category.id);
                     setShowCategoryModal(false);
                   }}
                 >
                   <View style={styles.categoryItemLeft}>
-                    <View style={[
-                      styles.categoryIconContainer,
-                      formData.category === category.id && styles.categoryIconContainerActive
-                    ]}>
-                      <Ionicons 
-                        name={category.icon} 
-                        size={22} 
-                        color={formData.category === category.id ? '#fff' : Colors.primary} 
+                    <View
+                      style={[
+                        styles.categoryIconContainer,
+                        formData.category === category.id &&
+                          styles.categoryIconContainerActive,
+                      ]}
+                    >
+                      <Ionicons
+                        name={category.icon}
+                        size={22}
+                        color={
+                          formData.category === category.id
+                            ? "#fff"
+                            : Colors.primary
+                        }
                       />
                     </View>
-                    <ThemedText style={[
-                      styles.categoryItemText,
-                      formData.category === category.id && styles.categoryItemTextActive
-                    ]}>
+                    <ThemedText
+                      style={[
+                        styles.categoryItemText,
+                        formData.category === category.id &&
+                          styles.categoryItemTextActive,
+                      ]}
+                    >
                       {category.label}
                     </ThemedText>
                   </View>
                   {formData.category === category.id && (
-                    <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color={Colors.primary}
+                    />
                   )}
                 </TouchableOpacity>
               ))}
@@ -769,13 +1012,13 @@ const CreateAuction = () => {
                 Choisir la date de fin
               </ThemedText>
               <View style={styles.modalHeaderButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setShowDatePickerModal(false)}
                   style={styles.modalHeaderButton}
                 >
                   <Ionicons name="close" size={24} color="#666" />
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={handleDateConfirm}
                   style={styles.modalHeaderButton}
                 >
@@ -786,17 +1029,24 @@ const CreateAuction = () => {
 
             <View style={styles.selectedDateDisplay}>
               <ThemedText style={styles.selectedDateText}>
-                {tempDate.toLocaleDateString('fr-FR', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
+                {tempDate.toLocaleDateString("fr-FR", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
                 })}
               </ThemedText>
               <View style={styles.selectedTimeContainer}>
-                <Ionicons name="time-outline" size={16} color={Colors.primary} />
+                <Ionicons
+                  name="time-outline"
+                  size={16}
+                  color={Colors.primary}
+                />
                 <ThemedText style={styles.selectedTimeText}>
-                  {tempDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  {tempDate.toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </ThemedText>
               </View>
               <View style={styles.selectedDateBadge}>
@@ -808,19 +1058,33 @@ const CreateAuction = () => {
             </View>
 
             <View style={styles.monthNavigation}>
-              <TouchableOpacity onPress={handlePrevMonth} style={styles.monthNavButton}>
-                <Ionicons name="chevron-back" size={24} color={Colors.primary} />
+              <TouchableOpacity
+                onPress={handlePrevMonth}
+                style={styles.monthNavButton}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={24}
+                  color={Colors.primary}
+                />
               </TouchableOpacity>
               <ThemedText style={styles.monthYearText}>
                 {months[currentMonth]} {currentYear}
               </ThemedText>
-              <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavButton}>
-                <Ionicons name="chevron-forward" size={24} color={Colors.primary} />
+              <TouchableOpacity
+                onPress={handleNextMonth}
+                style={styles.monthNavButton}
+              >
+                <Ionicons
+                  name="chevron-forward"
+                  size={24}
+                  color={Colors.primary}
+                />
               </TouchableOpacity>
             </View>
 
             <View style={styles.daysOfWeekContainer}>
-              {daysOfWeek.map(day => (
+              {daysOfWeek.map((day) => (
                 <ThemedText key={day} style={styles.dayOfWeekText}>
                   {day}
                 </ThemedText>
@@ -834,23 +1098,25 @@ const CreateAuction = () => {
                   style={[
                     styles.calendarDay,
                     item.empty && styles.calendarDayEmpty,
-                    !item.empty && 
-                    tempDate.getDate() === item.day && 
-                    tempDate.getMonth() === currentMonth &&
-                    tempDate.getFullYear() === currentYear && 
-                    styles.calendarDaySelected
+                    !item.empty &&
+                      tempDate.getDate() === item.day &&
+                      tempDate.getMonth() === currentMonth &&
+                      tempDate.getFullYear() === currentYear &&
+                      styles.calendarDaySelected,
                   ]}
                   onPress={() => !item.empty && handleSelectDate(item.day)}
                   disabled={item.empty}
                 >
                   {!item.empty && (
-                    <ThemedText style={[
-                      styles.calendarDayText,
-                      tempDate.getDate() === item.day && 
-                      tempDate.getMonth() === currentMonth &&
-                      tempDate.getFullYear() === currentYear && 
-                      styles.calendarDayTextSelected
-                    ]}>
+                    <ThemedText
+                      style={[
+                        styles.calendarDayText,
+                        tempDate.getDate() === item.day &&
+                          tempDate.getMonth() === currentMonth &&
+                          tempDate.getFullYear() === currentYear &&
+                          styles.calendarDayTextSelected,
+                      ]}
+                    >
                       {item.day}
                     </ThemedText>
                   )}
@@ -859,81 +1125,109 @@ const CreateAuction = () => {
             </View>
 
             <View style={styles.timePickerSection}>
-              <ThemedText style={styles.timePickerTitle}>Choisir l'heure</ThemedText>
-              
+              <ThemedText style={styles.timePickerTitle}>
+                Choisir l'heure
+              </ThemedText>
+
               <View style={styles.timePickerContainer}>
                 <View style={styles.timePickerColumn}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.timePickerArrow}
                     onPress={() => handleHourChange(1)}
                   >
-                    <Ionicons name="chevron-up" size={20} color={Colors.primary} />
+                    <Ionicons
+                      name="chevron-up"
+                      size={20}
+                      color={Colors.primary}
+                    />
                   </TouchableOpacity>
                   <View style={styles.timePickerValue}>
                     <ThemedText style={styles.timePickerValueText}>
-                      {selectedHour.toString().padStart(2, '0')}
+                      {selectedHour.toString().padStart(2, "0")}
                     </ThemedText>
                   </View>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.timePickerArrow}
                     onPress={() => handleHourChange(-1)}
                   >
-                    <Ionicons name="chevron-down" size={20} color={Colors.primary} />
+                    <Ionicons
+                      name="chevron-down"
+                      size={20}
+                      color={Colors.primary}
+                    />
                   </TouchableOpacity>
                   <ThemedText style={styles.timePickerLabel}>Heure</ThemedText>
                 </View>
 
                 <View style={styles.timePickerSeparator}>
-                  <ThemedText style={styles.timePickerSeparatorText}>:</ThemedText>
+                  <ThemedText style={styles.timePickerSeparatorText}>
+                    :
+                  </ThemedText>
                 </View>
 
                 <View style={styles.timePickerColumn}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.timePickerArrow}
                     onPress={() => handleMinuteChange(1)}
                   >
-                    <Ionicons name="chevron-up" size={20} color={Colors.primary} />
+                    <Ionicons
+                      name="chevron-up"
+                      size={20}
+                      color={Colors.primary}
+                    />
                   </TouchableOpacity>
                   <View style={styles.timePickerValue}>
                     <ThemedText style={styles.timePickerValueText}>
-                      {selectedMinute.toString().padStart(2, '0')}
+                      {selectedMinute.toString().padStart(2, "0")}
                     </ThemedText>
                   </View>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.timePickerArrow}
                     onPress={() => handleMinuteChange(-1)}
                   >
-                    <Ionicons name="chevron-down" size={20} color={Colors.primary} />
+                    <Ionicons
+                      name="chevron-down"
+                      size={20}
+                      color={Colors.primary}
+                    />
                   </TouchableOpacity>
                   <ThemedText style={styles.timePickerLabel}>Minute</ThemedText>
                 </View>
 
                 <View style={styles.timePickerAmPm}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
                       styles.timePickerAmPmButton,
-                      selectedAmPm === 'AM' && styles.timePickerAmPmButtonActive
+                      selectedAmPm === "AM" &&
+                        styles.timePickerAmPmButtonActive,
                     ]}
-                    onPress={() => handleAmPmChange('AM')}
+                    onPress={() => handleAmPmChange("AM")}
                   >
-                    <ThemedText style={[
-                      styles.timePickerAmPmText,
-                      selectedAmPm === 'AM' && styles.timePickerAmPmTextActive
-                    ]}>
+                    <ThemedText
+                      style={[
+                        styles.timePickerAmPmText,
+                        selectedAmPm === "AM" &&
+                          styles.timePickerAmPmTextActive,
+                      ]}
+                    >
                       AM
                     </ThemedText>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
                       styles.timePickerAmPmButton,
-                      selectedAmPm === 'PM' && styles.timePickerAmPmButtonActive
+                      selectedAmPm === "PM" &&
+                        styles.timePickerAmPmButtonActive,
                     ]}
-                    onPress={() => handleAmPmChange('PM')}
+                    onPress={() => handleAmPmChange("PM")}
                   >
-                    <ThemedText style={[
-                      styles.timePickerAmPmText,
-                      selectedAmPm === 'PM' && styles.timePickerAmPmTextActive
-                    ]}>
+                    <ThemedText
+                      style={[
+                        styles.timePickerAmPmText,
+                        selectedAmPm === "PM" &&
+                          styles.timePickerAmPmTextActive,
+                      ]}
+                    >
                       PM
                     </ThemedText>
                   </TouchableOpacity>
@@ -960,9 +1254,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 10,
   },
@@ -971,7 +1265,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   headerRight: {
     width: 40,
@@ -987,26 +1281,26 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
     paddingBottom: 10,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 10,
   },
   imageScrollContainer: {
-    position: 'relative',
+    position: "relative",
   },
   imageScroll: {
     flexGrow: 0,
   },
   imageGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     paddingVertical: 5,
     paddingRight: 20,
@@ -1015,54 +1309,54 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderWidth: 2,
-    borderColor: Colors.primary + '40',
-    borderStyle: 'dashed',
+    borderColor: Colors.primary + "40",
+    borderStyle: "dashed",
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.primary + '10',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.primary + "10",
   },
   galleryButtonText: {
     fontSize: 10,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 4,
     color: Colors.primary,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   imageContainer: {
-    position: 'relative',
+    position: "relative",
     width: 70,
     height: 70,
   },
   selectedImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: 8,
   },
   removeImageButton: {
-    position: 'absolute',
+    position: "absolute",
     top: -6,
     right: -6,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
   scrollIndicator: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
-    top: '50%',
+    top: "50%",
     transform: [{ translateY: -12 }],
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.61)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.61)",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -1071,20 +1365,20 @@ const styles = StyleSheet.create({
   scrollIndicatorText: {
     fontSize: 12,
     color: Colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 4,
   },
   inputGroup: {
     gap: 15,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    overflow: 'hidden',
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
   },
   inputIcon: {
     paddingHorizontal: 12,
@@ -1094,8 +1388,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingRight: 14,
     fontSize: 16,
-    backgroundColor: 'transparent',
-    color: '#333',
+    backgroundColor: "transparent",
+    color: "#333",
   },
   textArea: {
     flex: 1,
@@ -1103,9 +1397,9 @@ const styles = StyleSheet.create({
     paddingRight: 14,
     fontSize: 16,
     minHeight: 100,
-    textAlignVertical: 'top',
-    backgroundColor: 'transparent',
-    color: '#333',
+    textAlignVertical: "top",
+    backgroundColor: "transparent",
+    color: "#333",
   },
   inputError: {
     borderColor: Colors.warning,
@@ -1118,48 +1412,48 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   pickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 14,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
   },
   pickerButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   pickerButtonText: {
     fontSize: 16,
     marginLeft: 10,
-    color: '#333',
+    color: "#333",
   },
   expirationSection: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
     padding: 15,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
   },
   expirationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 15,
   },
   expirationHeaderText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 8,
-    color: '#333',
+    color: "#333",
   },
   durationScroll: {
     flexGrow: 0,
     marginBottom: 15,
   },
   durationContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     paddingVertical: 5,
   },
@@ -1167,32 +1461,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
   },
   durationButtonText: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
   durationButtonTextActive: {
-    color: '#fff',
-    fontWeight: '600',
+    color: "#fff",
+    fontWeight: "600",
   },
   selectedDateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
     borderRadius: 10,
     padding: 12,
     borderWidth: 1,
-    borderColor: Colors.primary + '30',
+    borderColor: Colors.primary + "30",
   },
   dateInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   dateTextContainer: {
@@ -1200,16 +1494,16 @@ const styles = StyleSheet.create({
   },
   dateLabel: {
     fontSize: 12,
-    color: '#666',
+    color: "#666",
     marginBottom: 2,
   },
   dateValue: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   daysBadge: {
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: Colors.primary + "15",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -1217,71 +1511,145 @@ const styles = StyleSheet.create({
   daysBadgeText: {
     fontSize: 12,
     color: Colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
+    backgroundColor: "#fff",
+    borderRadius: 20,
     padding: 20,
-    maxHeight: '80%',
+    width: "90%",
+    maxWidth: 400,
   },
-  datePickerModalContent: {
-    maxHeight: '90%',
+  paymentConfirmModal: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    width: "90%",
+    maxWidth: 400,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalHeaderButtons: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  modalHeaderButton: {
-    padding: 5,
+    borderBottomColor: "#f0f0f0",
+    gap: 12,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
+  },
+  paymentInfo: {
+    marginBottom: 20,
+  },
+  paymentInfoText: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  feeDetails: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    padding: 15,
+  },
+  feeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  feeLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
+  },
+  feeHighlight: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: Colors.primary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#e0e0e0",
+    marginVertical: 10,
+  },
+  feeLabelTotal: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  feeValueTotal: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: Colors.primary,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  cancelModalButton: {
+    backgroundColor: "#f0f0f0",
+  },
+  cancelModalButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+  },
+  confirmModalButton: {
+    backgroundColor: Colors.primary,
+  },
+  confirmModalButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
   },
   modalCloseButton: {
     padding: 5,
   },
   categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 12,
     borderRadius: 12,
     marginBottom: 10,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
   },
   categoryItemActive: {
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: Colors.primary + "10",
     borderWidth: 1,
     borderColor: Colors.primary,
   },
   categoryItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   categoryIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
   categoryIconContainerActive: {
@@ -1292,37 +1660,37 @@ const styles = StyleSheet.create({
   },
   categoryItemTextActive: {
     color: Colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   selectedDateDisplay: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
     padding: 10,
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: Colors.primary + "10",
     borderRadius: 12,
   },
   selectedDateText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.primary,
     marginBottom: 6,
-    textTransform: 'capitalize',
-    textAlign: 'center',
+    textTransform: "capitalize",
+    textAlign: "center",
   },
   selectedTimeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 6,
   },
   selectedTimeText: {
     fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
   selectedDateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 2,
@@ -1330,14 +1698,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   selectedDateBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   monthNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 1,
     paddingHorizontal: 10,
   },
@@ -1346,37 +1714,37 @@ const styles = StyleSheet.create({
   },
   monthYearText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   daysOfWeekContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     marginBottom: 10,
     paddingHorizontal: 5,
   },
   dayOfWeekText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#999',
+    fontWeight: "600",
+    color: "#999",
     width: 40,
-    textAlign: 'center',
+    textAlign: "center",
   },
   calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     marginBottom: 20,
     paddingHorizontal: 5,
   },
   calendarDay: {
-    width: '14.28%',
+    width: "14.28%",
     aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 4,
   },
   calendarDayEmpty: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   calendarDaySelected: {
     backgroundColor: Colors.primary,
@@ -1384,11 +1752,11 @@ const styles = StyleSheet.create({
   },
   calendarDayText: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   calendarDayTextSelected: {
-    color: '#fff',
-    fontWeight: '600',
+    color: "#fff",
+    fontWeight: "600",
   },
   timePickerSection: {
     marginTop: 1,
@@ -1396,22 +1764,22 @@ const styles = StyleSheet.create({
   },
   timePickerTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 10,
-    textAlign: 'center',
-    marginTop:'-100'
+    textAlign: "center",
+    marginTop: -100,
   },
   timePickerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 5,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
   },
   timePickerColumn: {
-    alignItems: 'center',
+    alignItems: "center",
     width: 70,
   },
   timePickerArrow: {
@@ -1420,38 +1788,38 @@ const styles = StyleSheet.create({
   timePickerValue: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     marginVertical: 4,
   },
   timePickerValueText: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.primary,
   },
   timePickerSeparator: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 5,
   },
   timePickerSeparatorText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#666',
+    fontWeight: "bold",
+    color: "#666",
   },
   timePickerAmPm: {
     marginLeft: 10,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   timePickerAmPmButton: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     marginVertical: 2,
   },
   timePickerAmPmButtonActive: {
@@ -1460,50 +1828,17 @@ const styles = StyleSheet.create({
   },
   timePickerAmPmText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: "600",
+    color: "#666",
   },
   timePickerAmPmTextActive: {
-    color: '#fff',
+    color: "#fff",
   },
   timePickerLabel: {
     fontSize: 10,
-    color: '#666',
+    color: "#666",
     marginTop: 4,
-    textAlign: 'center',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  modalActionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  modalCancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  modalCancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  modalConfirmButton: {
-    backgroundColor: Colors.primary,
-  },
-  modalConfirmButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    textAlign: "center",
   },
   buttonsContainer: {
     paddingHorizontal: 10,
@@ -1517,67 +1852,27 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   cancelButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderRadius: 12,
     paddingVertical: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 10,
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 10,
-  },
-  feeInfoBanner: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#ffc107',
-  },
-  feeInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  feeInfoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#856404',
-  },
-  feeInfoText: {
-    fontSize: 13,
-    color: '#856404',
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  feeInfoHighlight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 5,
-  },
-  feeInfoHighlightText: {
-    fontSize: 12,
-    color: '#856404',
-    fontWeight: '500',
-    flex: 1,
   },
 });

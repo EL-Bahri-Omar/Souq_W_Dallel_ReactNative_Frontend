@@ -25,6 +25,23 @@ export const paymentService = {
     }
   },
 
+  payCreationFees: async (auctionId, amount) => {
+    try {
+      console.log(
+        `Paying creation fees for auction ${auctionId} with amount ${amount}`,
+      );
+
+      const response = await axiosInstance.post(
+        API_ENDPOINTS.PAY_CREATION_FEES(auctionId, amount),
+      );
+      console.log("Pay creation fees response:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Creation payment error:", error);
+      throw error;
+    }
+  },
+
   payAuction: async (auctionId, amount) => {
     try {
       console.log(`Paying auction ${auctionId} with amount ${amount}`);

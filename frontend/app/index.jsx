@@ -126,8 +126,12 @@ const Home = () => {
 
     // Show all auctions EXCEPT pending ones
     const isNotPending = auction.status?.toLowerCase() !== "pending";
+    const isNotWaitingForPayment =
+      auction.status?.toLowerCase() !== "waiting for payment";
 
-    return matchesSearch && matchesCategory && isNotPending;
+    return (
+      matchesSearch && matchesCategory && isNotPending && isNotWaitingForPayment
+    );
   });
 
   const displayName =

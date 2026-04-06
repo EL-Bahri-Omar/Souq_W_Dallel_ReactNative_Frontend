@@ -71,6 +71,8 @@ export const API_ENDPOINTS = {
   CREATE_PAYMENT_INTENT: "/api/payment/pay1dt",
   PAY_AUCTION: (auctionId, amount) =>
     `/api/payment/payAuction/${auctionId}/${amount}`,
+  PAY_CREATION_FEES: (auctionId, amount) =>
+    `/api/payment/payCreationAuctionFees/${auctionId}/${amount}`,
 
   // Parcel endpoints
   GET_ALL_PARCELS: "/api/parcels/getAll",

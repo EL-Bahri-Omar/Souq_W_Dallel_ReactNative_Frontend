@@ -39,7 +39,7 @@ export const auctionService = {
       description: auctionData.description,
       startingPrice: parseFloat(auctionData.startingPrice),
       category: auctionData.category,
-      status: "pending",
+      status: "waiting for payment",
       bidders: {},
       sellerId: userId,
       expireDate: expireDate,
@@ -160,10 +160,17 @@ export const auctionService = {
   },
 
   deleteAuction: async (auctionId) => {
-    const response = await axiosInstance.delete(
-      API_ENDPOINTS.DELETE_AUCTION(auctionId),
-    );
-    return response.data;
+    try {
+      console.log(`Deleting auction ${auctionId}`);
+      const response = await axiosInstance.delete(
+        API_ENDPOINTS.DELETE_AUCTION(auctionId),
+      );
+      console.log(`Auction ${auctionId} deleted successfully`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error deleting auction ${auctionId}:`, error);
+      throw error;
+    }
   },
 
   getUserAuctions: async (userId) => {

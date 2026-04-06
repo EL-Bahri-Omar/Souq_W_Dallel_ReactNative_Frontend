@@ -1,8 +1,8 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { auctionService } from '../services/auctionService';
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { auctionService } from "../services/auctionService";
 
 export const fetchAllAuctions = createAsyncThunk(
-  'auction/fetchAll',
+  "auction/fetchAll",
   async (_, { rejectWithValue }) => {
     try {
       const auctions = await auctionService.getAllAuctions();
@@ -10,11 +10,11 @@ export const fetchAllAuctions = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchAuctionsByStatus = createAsyncThunk(
-  'auction/fetchByStatus',
+  "auction/fetchByStatus",
   async (status, { rejectWithValue }) => {
     try {
       const auctions = await auctionService.getAuctionsByStatus(status);
@@ -22,11 +22,11 @@ export const fetchAuctionsByStatus = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchAuctionById = createAsyncThunk(
-  'auction/fetchById',
+  "auction/fetchById",
   async (auctionId, { rejectWithValue }) => {
     try {
       const auction = await auctionService.getAuctionById(auctionId);
@@ -34,96 +34,120 @@ export const fetchAuctionById = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const createAuction = createAsyncThunk(
-  'auction/create',
+  "auction/create",
   async ({ auctionData, photoFiles = [], userId }, { rejectWithValue }) => {
     try {
-      const auction = await auctionService.createAuction(auctionData, photoFiles, userId);
+      const auction = await auctionService.createAuction(
+        auctionData,
+        photoFiles,
+        userId,
+      );
       return auction;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const updateAuction = createAsyncThunk(
-  'auction/update',
-  async ({ auctionId, auctionData, photoFiles = [], removedPhotoIds = [] }, { rejectWithValue }) => {
+  "auction/update",
+  async (
+    { auctionId, auctionData, photoFiles = [], removedPhotoIds = [] },
+    { rejectWithValue },
+  ) => {
     try {
-      const auction = await auctionService.updateAuction(auctionId, auctionData, photoFiles, removedPhotoIds);
+      const auction = await auctionService.updateAuction(
+        auctionId,
+        auctionData,
+        photoFiles,
+        removedPhotoIds,
+      );
       return auction;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const approveAuction = createAsyncThunk(
-  'auction/approve',
+  "auction/approve",
   async ({ auctionId, adminId }, { rejectWithValue }) => {
     try {
-      const auction = await auctionService.updateAuctionStatus(auctionId, adminId, 'active');
+      const auction = await auctionService.updateAuctionStatus(
+        auctionId,
+        adminId,
+        "active",
+      );
       return auction;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const denyAuction = createAsyncThunk(
-  'auction/deny',
+  "auction/deny",
   async ({ auctionId, adminId }, { rejectWithValue }) => {
     try {
-      const auction = await auctionService.updateAuctionStatus(auctionId, adminId, 'denied');
+      const auction = await auctionService.updateAuctionStatus(
+        auctionId,
+        adminId,
+        "denied",
+      );
       return auction;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const processWinner = createAsyncThunk(
-  'auction/processWinner',
+  "auction/processWinner",
   async (auctionId, { rejectWithValue, dispatch }) => {
     try {
       console.log(`Calling processWinner endpoint for auction ${auctionId}`);
-      
+
       // Call backend to process winner
       const response = await auctionService.processWinner(auctionId);
-      console.log('Process winner response:', response);
-      
+      console.log("Process winner response:", response);
+
       // Fetch the updated auction to get the new status
       const updatedAuction = await auctionService.getAuctionById(auctionId);
-      console.log('Updated auction:', updatedAuction);
-      
+      console.log("Updated auction:", updatedAuction);
+
       return { auctionId, auction: updatedAuction };
     } catch (error) {
-      console.error('Process winner error:', error);
+      console.error("Process winner error:", error);
       if (error.response) {
-        console.error('Error response:', error.response.data);
+        console.error("Error response:", error.response.data);
       }
-      return rejectWithValue(error.message || 'Failed to process winner');
+      return rejectWithValue(error.message || "Failed to process winner");
     }
-  }
+  },
 );
 
 export const placeBid = createAsyncThunk(
-  'auction/placeBid',
+  "auction/placeBid",
   async ({ auctionId, bidderId, bidAmount }, { rejectWithValue }) => {
     try {
-      const result = await auctionService.placeBid(auctionId, bidderId, bidAmount);
+      const result = await auctionService.placeBid(
+        auctionId,
+        bidderId,
+        bidAmount,
+      );
       return result;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const deleteAuction = createAsyncThunk(
-  'auction/delete',
+  "auction/delete",
   async (auctionId, { rejectWithValue }) => {
     try {
       await auctionService.deleteAuction(auctionId);
@@ -131,11 +155,11 @@ export const deleteAuction = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 export const fetchUserAuctions = createAsyncThunk(
-  'auction/fetchUserAuctions',
+  "auction/fetchUserAuctions",
   async (userId, { rejectWithValue }) => {
     try {
       const auctions = await auctionService.getUserAuctions(userId);
@@ -143,7 +167,7 @@ export const fetchUserAuctions = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 const updateExpiredStatus = (auction) => {
@@ -151,7 +175,7 @@ const updateExpiredStatus = (auction) => {
 };
 
 const auctionSlice = createSlice({
-  name: 'auction',
+  name: "auction",
   initialState: {
     auctions: [],
     userAuctions: [],
@@ -166,19 +190,21 @@ const auctionSlice = createSlice({
   reducers: {
     updateAuctionInStore: (state, action) => {
       const updatedAuction = action.payload;
-      
+
       // Update in main auctions list
-      const index = state.auctions.findIndex(a => a.id === updatedAuction.id);
+      const index = state.auctions.findIndex((a) => a.id === updatedAuction.id);
       if (index !== -1) {
         state.auctions[index] = updatedAuction;
       }
-      
+
       // Update in user auctions list
-      const userIndex = state.userAuctions.findIndex(a => a.id === updatedAuction.id);
+      const userIndex = state.userAuctions.findIndex(
+        (a) => a.id === updatedAuction.id,
+      );
       if (userIndex !== -1) {
         state.userAuctions[userIndex] = updatedAuction;
       }
-      
+
       // Update current auction if it's the same one
       if (state.currentAuction?.id === updatedAuction.id) {
         state.currentAuction = updatedAuction;
@@ -211,7 +237,7 @@ const auctionSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       .addCase(fetchAuctionsByStatus.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -224,7 +250,7 @@ const auctionSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       .addCase(fetchAuctionById.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -237,7 +263,7 @@ const auctionSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+
       .addCase(createAuction.pending, (state) => {
         state.creating = true;
         state.error = null;
@@ -254,7 +280,7 @@ const auctionSlice = createSlice({
         state.creating = false;
         state.error = action.payload;
       })
-      
+
       .addCase(updateAuction.pending, (state) => {
         state.updating = true;
         state.error = null;
@@ -263,17 +289,21 @@ const auctionSlice = createSlice({
         state.updating = false;
         if (action.payload) {
           const updatedAuction = updateExpiredStatus(action.payload);
-          
-          const index = state.auctions.findIndex(a => a.id === updatedAuction.id);
+
+          const index = state.auctions.findIndex(
+            (a) => a.id === updatedAuction.id,
+          );
           if (index !== -1) {
             state.auctions[index] = updatedAuction;
           }
-          
-          const userIndex = state.userAuctions.findIndex(a => a.id === updatedAuction.id);
+
+          const userIndex = state.userAuctions.findIndex(
+            (a) => a.id === updatedAuction.id,
+          );
           if (userIndex !== -1) {
             state.userAuctions[userIndex] = updatedAuction;
           }
-          
+
           if (state.currentAuction?.id === updatedAuction.id) {
             state.currentAuction = updatedAuction;
           }
@@ -283,7 +313,7 @@ const auctionSlice = createSlice({
         state.updating = false;
         state.error = action.payload;
       })
-      
+
       .addCase(approveAuction.pending, (state) => {
         state.updating = true;
         state.error = null;
@@ -292,17 +322,21 @@ const auctionSlice = createSlice({
         state.updating = false;
         if (action.payload) {
           const updatedAuction = updateExpiredStatus(action.payload);
-          
-          const index = state.auctions.findIndex(a => a.id === updatedAuction.id);
+
+          const index = state.auctions.findIndex(
+            (a) => a.id === updatedAuction.id,
+          );
           if (index !== -1) {
             state.auctions[index] = updatedAuction;
           }
-          
-          const userIndex = state.userAuctions.findIndex(a => a.id === updatedAuction.id);
+
+          const userIndex = state.userAuctions.findIndex(
+            (a) => a.id === updatedAuction.id,
+          );
           if (userIndex !== -1) {
             state.userAuctions[userIndex] = updatedAuction;
           }
-          
+
           if (state.currentAuction?.id === updatedAuction.id) {
             state.currentAuction = updatedAuction;
           }
@@ -312,7 +346,7 @@ const auctionSlice = createSlice({
         state.updating = false;
         state.error = action.payload;
       })
-      
+
       .addCase(denyAuction.pending, (state) => {
         state.updating = true;
         state.error = null;
@@ -321,17 +355,21 @@ const auctionSlice = createSlice({
         state.updating = false;
         if (action.payload) {
           const updatedAuction = updateExpiredStatus(action.payload);
-          
-          const index = state.auctions.findIndex(a => a.id === updatedAuction.id);
+
+          const index = state.auctions.findIndex(
+            (a) => a.id === updatedAuction.id,
+          );
           if (index !== -1) {
             state.auctions[index] = updatedAuction;
           }
-          
-          const userIndex = state.userAuctions.findIndex(a => a.id === updatedAuction.id);
+
+          const userIndex = state.userAuctions.findIndex(
+            (a) => a.id === updatedAuction.id,
+          );
           if (userIndex !== -1) {
             state.userAuctions[userIndex] = updatedAuction;
           }
-          
+
           if (state.currentAuction?.id === updatedAuction.id) {
             state.currentAuction = updatedAuction;
           }
@@ -341,21 +379,29 @@ const auctionSlice = createSlice({
         state.updating = false;
         state.error = action.payload;
       })
-      
+
       .addCase(deleteAuction.pending, (state) => {
         state.deleting = true;
         state.error = null;
       })
       .addCase(deleteAuction.fulfilled, (state, action) => {
         state.deleting = false;
-        state.auctions = state.auctions.filter(a => a.id !== action.payload.auctionId);
-        state.userAuctions = state.userAuctions.filter(a => a.id !== action.payload.auctionId);
+        state.auctions = state.auctions.filter(
+          (a) => a.id !== action.payload.auctionId,
+        );
+        state.userAuctions = state.userAuctions.filter(
+          (a) => a.id !== action.payload.auctionId,
+        );
+        if (state.currentAuction?.id === action.payload.auctionId) {
+          state.currentAuction = null;
+        }
+        console.log(`Auction ${action.payload.auctionId} removed from store`);
       })
       .addCase(deleteAuction.rejected, (state, action) => {
         state.deleting = false;
         state.error = action.payload;
       })
-      
+
       .addCase(fetchUserAuctions.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -372,13 +418,15 @@ const auctionSlice = createSlice({
         const { auctionId, auction } = action.payload;
 
         // Update in main auctions list
-        const index = state.auctions.findIndex(a => a.id === auctionId);
+        const index = state.auctions.findIndex((a) => a.id === auctionId);
         if (index !== -1) {
           state.auctions[index] = auction;
         }
 
         // Update in user auctions list
-        const userIndex = state.userAuctions.findIndex(a => a.id === auctionId);
+        const userIndex = state.userAuctions.findIndex(
+          (a) => a.id === auctionId,
+        );
         if (userIndex !== -1) {
           state.userAuctions[userIndex] = auction;
         }
@@ -388,16 +436,17 @@ const auctionSlice = createSlice({
           state.currentAuction = auction;
         }
 
-        console.log(`Auction ${auctionId} marked as ended and winner processed`);
-        
-        // Trigger a notification refresh to get the new notification
-        // This assumes you have a fetchNotifications function
-        if (state.auth?.user?.id) {
-          store.dispatch(fetchNotifications(state.auth.user.id));
-        }
+        console.log(
+          `Auction ${auctionId} marked as ended and winner processed`,
+        );
       });
   },
 });
 
-export const { clearAuctions, clearCurrentAuction, clearError, updateAuctionInStore } = auctionSlice.actions;
+export const {
+  clearAuctions,
+  clearCurrentAuction,
+  clearError,
+  updateAuctionInStore,
+} = auctionSlice.actions;
 export default auctionSlice.reducer;
