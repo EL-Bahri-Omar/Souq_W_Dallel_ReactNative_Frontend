@@ -10,14 +10,20 @@ import depositReducer from './slices/depositSlice';
 import parcelReducer from './slices/parcelSlice';
 import reviewReducer from './slices/reviewSlice';
 
-const persistConfig = {
-  key: 'root',
+const authPersistConfig = {
+  key: 'auth',
   storage: AsyncStorage,
-  whitelist: ['auth', 'payment'],
+  whitelist: ['token', 'user'],
 };
 
-const persistedAuthReducer = persistReducer(persistConfig, authReducer);
-const persistedPaymentReducer = persistReducer(persistConfig, paymentReducer);
+const paymentPersistConfig = {
+  key: 'payment',
+  storage: AsyncStorage,
+  whitelist: ['clientSecret'],
+};
+
+const persistedAuthReducer = persistReducer(authPersistConfig, authReducer);
+const persistedPaymentReducer = persistReducer(paymentPersistConfig, paymentReducer);
 
 export const store = configureStore({
   reducer: {
@@ -33,7 +39,7 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
+        ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE', 'persist/PURGE', 'persist/FLUSH'],
       },
     }),
 });

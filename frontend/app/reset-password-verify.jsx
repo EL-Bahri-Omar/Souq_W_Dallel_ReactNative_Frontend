@@ -6,7 +6,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme,
   TextInput,
   ActivityIndicator,
   ScrollView
@@ -21,11 +20,13 @@ import ThemedCard from '../components/ThemedCard';
 import ThemedTextInput from '../components/ThemedTextInput';
 import Spacer from '../components/Spacer';
 import { Colors } from '../constants/Colors';
+import { confirmDialog, showAlert } from '../utils/alertHelper';
 import { authService } from '../store/services/authService';
+import { useTheme } from "../constants/ThemeContext";
 
 const ResetPasswordVerify = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -55,7 +56,7 @@ const ResetPasswordVerify = () => {
       }
       
       if (!savedEmail || !savedCin) {
-        Alert.alert(
+        showAlert(
           'Aucune demande trouvée',
           'Veuillez d\'abord demander un code de réinitialisation.',
           [{ text: 'OK', onPress: () => router.replace('/reset-password') }]
@@ -93,7 +94,7 @@ const ResetPasswordVerify = () => {
     const verificationCode = code.join('');
     
     if (verificationCode.length !== 6) {
-      Alert.alert('Erreur', 'Veuillez entrer le code à 6 chiffres');
+      showAlert('Erreur', 'Veuillez entrer le code à 6 chiffres');
       return;
     }
 
@@ -104,17 +105,17 @@ const ResetPasswordVerify = () => {
 
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert('Erreur', 'Veuillez entrer et confirmer votre nouveau mot de passe');
+      showAlert('Erreur', 'Veuillez entrer et confirmer votre nouveau mot de passe');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
+      showAlert('Erreur', 'Les mots de passe ne correspondent pas');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      showAlert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
       return;
     }
 
@@ -134,7 +135,7 @@ const ResetPasswordVerify = () => {
       // Clear stored data
       await AsyncStorage.multiRemove(['resetPasswordEmail', 'resetPasswordCin']);
       
-      Alert.alert(
+      showAlert(
         'Succès', 
         result.message,
         [{ text: 'OK', onPress: () => router.replace('/login') }]
@@ -142,7 +143,7 @@ const ResetPasswordVerify = () => {
       
     } catch (error) {
       console.error('Update password error:', error);
-      Alert.alert('Erreur', error.message);
+      showAlert('Erreur', error.message);
     } finally {
       setLoading(false);
     }

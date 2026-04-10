@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -7,19 +7,21 @@ import {
   ActivityIndicator,
   Image,
   TouchableOpacity,
-  Modal
+  Modal,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useColorScheme } from 'react-native';
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedButton from "../../components/ThemedButton";
 import ThemedCard from "../../components/ThemedCard";
 import Spacer from "../../components/Spacer";
 import { useAuth } from "../../hooks/useAuth";
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { fetchUserById, updateUser, deleteUserPhoto } from '../../store/slices/userSlice';
 import { Colors } from '../../constants/Colors';
@@ -27,7 +29,7 @@ import { userService } from '../../store/services/userService';
 
 const Profile = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user: authUser, logout } = useAuth();
   const dispatch = useAppDispatch();
@@ -62,14 +64,12 @@ const Profile = () => {
   const loadUserDataAndPhoto = async () => {
     try {
       setIsLoading(true);
-      
-      // Load user data first
       await dispatch(fetchUserById(authUser.id)).unwrap();
       
     } catch (error) {
       console.error('Error loading user data:', error);
       if (error.status === 404) {
-        Alert.alert('Info', 'User profile not found. Some information may be limited.');
+        showAlert('Info', 'User profile not found. Some information may be limited.');
       }
     } finally {
       setIsLoading(false);
@@ -84,7 +84,6 @@ const Profile = () => {
 
     try {
       setPhotoRefreshing(true);
-      // Get fresh photo URL with timestamp to prevent caching
       const photoUrl = `${userService.getUserPhotoUrl(userData.id, userData.photoId)}?t=${Date.now()}`;
       setUserPhotoUrl(photoUrl);
     } catch (error) {
@@ -99,7 +98,7 @@ const Profile = () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Sorry, we need camera roll permissions to upload photos.');
+      showAlert('Permission required', 'Sorry, we need camera roll permissions to upload photos.');
       return;
     }
 
@@ -115,13 +114,11 @@ const Profile = () => {
       setPhotoModalVisible(true);
     }
   };
-
-  // For futur use
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Sorry, we need camera permissions to take photos.');
+      showAlert('Permission required', 'Sorry, we need camera permissions to take photos.');
       return;
     }
 
@@ -153,16 +150,14 @@ const Profile = () => {
         },
         photoFile: selectedImage
       })).unwrap();
-      
-      // Reload user data to get updated photoId
       await loadUserDataAndPhoto();
-      Alert.alert('Success', 'Profile photo updated!');
+      showAlert('Success', 'Profile photo updated!');
       setPhotoModalVisible(false);
       setSelectedImage(null);
       
     } catch (error) {
       console.error('Upload error:', error);
-      Alert.alert('Error', 'Failed to upload photo');
+      showAlert('Error', 'Failed to upload photo');
     } finally {
       setIsLoading(false);
     }
@@ -173,37 +168,23 @@ const Profile = () => {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsLoggingOut(true);
-              await logout();
-              
-              Alert.alert('Success', 'Logged out successfully!', [
-                { 
-                  text: 'OK', 
-                  onPress: () => {
-                    router.replace('/(auth)/login');
-                  }
-                }
-              ]);
-              
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            } finally {
-              setIsLoggingOut(false);
-            }
-          }
-        }
-      ]
+    const performLogout = async () => {
+      try {
+        setIsLoggingOut(true);
+        await logout();
+        router.replace('/(auth)/login');
+      } catch (error) {
+        console.error('Logout error:', error);
+        showAlert('Error', 'Failed to logout. Please try again.');
+      } finally {
+        setIsLoggingOut(false);
+      }
+    };
+
+    confirmDialog(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      performLogout
     );
   };
 

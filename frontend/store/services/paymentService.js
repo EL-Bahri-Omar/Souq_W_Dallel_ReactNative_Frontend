@@ -1,15 +1,13 @@
-import axiosInstance from "../../lib/axios";
+﻿import axiosInstance from "../../lib/axios";
 import { API_ENDPOINTS, API_BASE_URL } from "../../constants/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const paymentService = {
   createPaymentIntent: async () => {
     try {
-      console.log("Creating payment intent");
       const response = await axiosInstance.post(
         API_ENDPOINTS.CREATE_PAYMENT_INTENT,
       );
-      console.log("Payment intent response:", response.data);
 
       if (!response.data || !response.data.clientSecret) {
         throw new Error("Invalid payment response from server");
@@ -27,14 +25,10 @@ export const paymentService = {
 
   payCreationFees: async (auctionId, amount) => {
     try {
-      console.log(
-        `Paying creation fees for auction ${auctionId} with amount ${amount}`,
-      );
 
       const response = await axiosInstance.post(
         API_ENDPOINTS.PAY_CREATION_FEES(auctionId, amount),
       );
-      console.log("Pay creation fees response:", response.data);
       return response.data;
     } catch (error) {
       console.error("Creation payment error:", error);
@@ -44,11 +38,9 @@ export const paymentService = {
 
   payAuction: async (auctionId, amount) => {
     try {
-      console.log(`Paying auction ${auctionId} with amount ${amount}`);
       const response = await axiosInstance.post(
         API_ENDPOINTS.PAY_AUCTION(auctionId, amount),
       );
-      console.log("Pay auction response:", response.data);
       return response.data;
     } catch (error) {
       console.error("Auction payment error:", error);

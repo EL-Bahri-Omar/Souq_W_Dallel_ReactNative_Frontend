@@ -11,6 +11,7 @@ import ThemedTextInput from "../../components/ThemedTextInput";
 import Spacer from '../../components/Spacer';
 import { useAuth } from "../../hooks/useAuth";
 import { Colors } from "../../constants/Colors";
+import { showAlert } from '../../utils/alertHelper';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -31,17 +32,17 @@ const Register = () => {
 
   const handleSubmit = async () => {
     if (!formData.firstname || !formData.lastname || !formData.cin || !formData.email || !formData.password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
+      showAlert('Erreur', 'Veuillez remplir tous les champs obligatoires');
       return;
     }
     
     if (formData.cin.length !== 8) {
-      Alert.alert('Erreur', 'Le CIN doit contenir 8 chiffres');
+      showAlert('Erreur', 'Le CIN doit contenir 8 chiffres');
       return;
     }
 
     if (formData.password.length < 6) {
-      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      showAlert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
       return;
     }
     
@@ -59,18 +60,15 @@ const Register = () => {
         await AsyncStorage.setItem('pendingVerificationEmail', formData.email);
         await AsyncStorage.setItem('pendingRegistrationPassword', formData.password);
         
-        Alert.alert(
+        showAlert(
           'Inscription réussie !',
           `Un code de vérification a été envoyé à ${formData.email}. Vous serez automatiquement connecté après vérification.`,
-          [{ 
-            text: 'Vérifier maintenant', 
-            onPress: () => router.replace('/verify-account') 
-          }]
         );
+        router.replace('/verify-account');
       }
       
     } catch (err) {
-      Alert.alert('Échec de l\'inscription', err || 'Veuillez réessayer.');
+      showAlert('Échec de l\'inscription', err || 'Veuillez réessayer.');
     }
   };
 

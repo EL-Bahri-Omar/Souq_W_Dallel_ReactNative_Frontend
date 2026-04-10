@@ -15,7 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useColorScheme } from "react-native";
+import { useTheme } from "../constants/ThemeContext";
 import ThemedView from "../components/ThemedView";
 import ThemedText from "../components/ThemedText";
 import ThemedButton from "../components/ThemedButton";
@@ -23,6 +23,7 @@ import ThemedCard from "../components/ThemedCard";
 import Spacer from "../components/Spacer";
 import AuctionPaymentModal from "../components/AuctionPaymentModal";
 import { useAuth } from "../hooks/useAuth";
+import { confirmDialog, showAlert } from '../utils/alertHelper';
 import { useAppDispatch } from "../hooks/useAppDispatch";
 import { createAuction } from "../store/slices/auctionSlice";
 import { auctionService } from "../store/services/auctionService";
@@ -68,7 +69,7 @@ const daysOfWeek = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
 
 const CreateAuction = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -239,7 +240,7 @@ const CreateAuction = () => {
   const handleDateConfirm = () => {
     const now = new Date();
     if (tempDate <= now) {
-      Alert.alert(
+      showAlert(
         "Date invalide",
         "La date d'expiration doit être dans le futur",
       );
@@ -255,7 +256,7 @@ const CreateAuction = () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== "granted") {
-      Alert.alert(
+      showAlert(
         "Permission requise",
         "Nous avons besoin d'accéder à votre galerie pour uploader des photos.",
       );
@@ -273,7 +274,7 @@ const CreateAuction = () => {
     if (!result.canceled && result.assets) {
       const newImages = [...selectedImages, ...result.assets];
       if (newImages.length > 10) {
-        Alert.alert(
+        showAlert(
           "Limite dépassée",
           "Vous ne pouvez uploader que 10 images maximum.",
         );
@@ -336,7 +337,7 @@ const CreateAuction = () => {
 
   const handleCreateAuction = async () => {
     if (!validateForm()) {
-      Alert.alert(
+      showAlert(
         "Erreur de validation",
         "Veuillez corriger les erreurs dans le formulaire",
       );
@@ -370,7 +371,7 @@ const CreateAuction = () => {
       setShowPaymentConfirmationModal(true);
     } catch (error) {
       console.error("Create auction error:", error);
-      Alert.alert(
+      showAlert(
         "Erreur",
         error.message || "Échec de la création de l'enchère.",
       );
@@ -395,11 +396,8 @@ const CreateAuction = () => {
   const handleAuctionPaymentComplete = async () => {
     setPaymentCompleted(true);
     setShowAuctionPaymentModal(false);
-    Alert.alert(
-      "Succès",
-      "Paiement effectué avec succès ! Votre enchère a été créée et est en attente d'approbation.",
-      [{ text: "OK", onPress: () => router.replace("/") }],
-    );
+
+    router.replace("/");
     resetForm();
     setPendingAuctionId(null);
     setPendingStartingPrice(0);
@@ -419,7 +417,7 @@ const CreateAuction = () => {
     setPendingAuctionId(null);
     setPendingStartingPrice(0);
     setFeeAmount(0);
-    Alert.alert(
+    showAlert(
       "Paiement annulé",
       "Vous pouvez reprendre la création d'enchère quand vous voulez.",
     );

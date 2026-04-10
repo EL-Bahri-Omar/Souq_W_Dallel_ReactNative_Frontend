@@ -6,7 +6,6 @@ import {
   Alert, 
   KeyboardAvoidingView,
   Platform,
-  useColorScheme
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +17,14 @@ import ThemedTextInput from '../components/ThemedTextInput';
 import ThemedCard from '../components/ThemedCard';
 import Spacer from '../components/Spacer';
 import { Colors } from '../constants/Colors';
+import { confirmDialog, showAlert } from '../utils/alertHelper';
 import { TouchableOpacity, ActivityIndicator } from 'react-native';
 import { authService } from '../store/services/authService';
+import { useTheme } from "../constants/ThemeContext";
 
 const ResetPassword = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const [formData, setFormData] = useState({
     cin: '',
@@ -39,12 +40,12 @@ const ResetPassword = () => {
 
   const handleSubmit = async () => {
     if (!formData.cin || !formData.email) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      showAlert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
 
     if (formData.cin.length !== 8) {
-      Alert.alert('Erreur', 'Le CIN doit contenir 8 chiffres');
+      showAlert('Erreur', 'Le CIN doit contenir 8 chiffres');
       return;
     }
 
@@ -58,7 +59,7 @@ const ResetPassword = () => {
       await AsyncStorage.setItem('resetPasswordEmail', formData.email);
       await AsyncStorage.setItem('resetPasswordCin', formData.cin);
       
-      Alert.alert(
+      showAlert(
         'Code Envoyé', 
         result.message,
         [{ 
@@ -67,7 +68,7 @@ const ResetPassword = () => {
         }]
       );
     } catch (error) {
-      Alert.alert('Erreur', error.message);
+      showAlert('Erreur', error.message);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import { 
+﻿import { 
   StyleSheet, 
   View, 
   ScrollView, 
@@ -12,7 +12,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useColorScheme } from 'react-native';
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedButton from "../../components/ThemedButton";
@@ -20,6 +20,7 @@ import ThemedTextInput from "../../components/ThemedTextInput";
 import ThemedCard from "../../components/ThemedCard";
 import Spacer from "../../components/Spacer";
 import { useAuth } from "../../hooks/useAuth";
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { fetchUserById, updateUser } from '../../store/slices/userSlice';
 import { Colors } from '../../constants/Colors';
@@ -27,7 +28,7 @@ import { userService } from '../../store/services/userService';
 
 const EditProfile = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user: authUser } = useAuth();
   const dispatch = useAppDispatch();
@@ -84,7 +85,6 @@ const EditProfile = () => {
 
     try {
       setPhotoRefreshing(true);
-      // Get fresh photo URL with timestamp to prevent caching
       const photoUrl = `${userService.getUserPhotoUrl(userData.id, userData.photoId)}?t=${Date.now()}`;
       setUserPhotoUrl(photoUrl);
     } catch (error) {
@@ -99,7 +99,7 @@ const EditProfile = () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'Sorry, we need camera roll permissions to upload photos.');
+      showAlert('Permission required', 'Sorry, we need camera roll permissions to upload photos.');
       return;
     }
 
@@ -150,7 +150,7 @@ const EditProfile = () => {
     Keyboard.dismiss();
     
     if (!validateForm()) {
-      Alert.alert('Validation Error', 'Please fix the errors in the form');
+      showAlert('Validation Error', 'Please fix the errors in the form');
       return;
     }
     
@@ -170,14 +170,14 @@ const EditProfile = () => {
         photoFile: selectedImage
       })).unwrap();
       
-      Alert.alert(
+      showAlert(
         'Success',
         'Profile updated successfully!',
         [{ text: 'OK', onPress: () => router.back() }]
       );
       
     } catch (error) {
-      Alert.alert(
+      showAlert(
         'Error',
         error.message || 'Failed to update profile. Please try again.'
       );

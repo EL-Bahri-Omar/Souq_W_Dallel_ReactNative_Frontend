@@ -4,11 +4,11 @@ import { useAuth } from "../../hooks/useAuth";
 import AuthGuard from "../../components/auth/AuthGuard";
 import { View, StyleSheet } from "react-native";
 import { Colors } from "../../constants/Colors";
-import { useColorScheme } from "react-native";
+import { useTheme } from "../../constants/ThemeContext";
 
 const AdminLayout = () => {
   const { user } = useAuth();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
 
   return (

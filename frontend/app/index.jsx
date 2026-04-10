@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -13,7 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "react-native";
+import { useTheme } from "../constants/ThemeContext";
 import ThemedView from "../components/ThemedView";
 import ThemedText from "../components/ThemedText";
 import AuctionCard from "../components/AuctionCard";
@@ -42,7 +42,7 @@ const categories = [
 
 const Home = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme, toggleTheme, isDark } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user: authUser } = useAuth();
   const dispatch = useAppDispatch();
@@ -51,6 +51,7 @@ const Home = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedStatus, setSelectedStatus] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
   const [userPhotoUrl, setUserPhotoUrl] = useState(null);
   const [photoRefreshing, setPhotoRefreshing] = useState(false);
@@ -129,8 +130,15 @@ const Home = () => {
     const isNotWaitingForPayment =
       auction.status?.toLowerCase() !== "waiting for payment";
 
+    // Status filter
+    const now = new Date();
+    const matchesStatus =
+      selectedStatus === "all" ||
+      (selectedStatus === "active" && auction.status === "active" && new Date(auction.expireDate) > now) ||
+      (selectedStatus === "ended" && (auction.status === "ended" || new Date(auction.expireDate) <= now));
+
     return (
-      matchesSearch && matchesCategory && isNotPending && isNotWaitingForPayment
+      matchesSearch && matchesCategory && isNotPending && isNotWaitingForPayment && matchesStatus
     );
   });
 
@@ -153,6 +161,8 @@ const Home = () => {
         onClose={() => setRightSidebarVisible(false)}
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
+        selectedStatus={selectedStatus}
+        onSelectStatus={setSelectedStatus}
       />
 
       {/* Header */}
@@ -167,46 +177,62 @@ const Home = () => {
           </TouchableOpacity>
 
           <View style={styles.logoContainer}>
-            <Ionicons name="hammer" size={28} color={Colors.primary} />
-            <ThemedText title style={styles.appName}>
-              Souq w Dallel
-            </ThemedText>
+            <Ionicons name="hammer" size={22} color={Colors.primary} />
+            <View style={styles.appNameContainer}>
+              <ThemedText title style={styles.appNameLine}>Souq</ThemedText>
+              <ThemedText title style={styles.appNameLine}>w</ThemedText>
+              <ThemedText title style={styles.appNameLine}>Dallel</ThemedText>
+            </View>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.profileContainer}
-          onPress={() => router.push("/(dashboard)/profile")}
-        >
-          <View style={styles.profileInfo}>
-            <ThemedText style={styles.profileName} numberOfLines={1}>
-              {displayName}
-            </ThemedText>
-          </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.profileContainer}
+            onPress={() => router.push("/(dashboard)/profile")}
+          >
+            <View style={styles.profileInfo}>
+              <ThemedText style={styles.profileName} numberOfLines={1}>
+                {displayName}
+              </ThemedText>
+            </View>
 
-          <View style={styles.photoContainer}>
-            {userPhotoUrl && !photoRefreshing ? (
-              <Image
-                source={{ uri: userPhotoUrl }}
-                style={styles.profilePhoto}
-                onError={() => setUserPhotoUrl(null)}
-              />
-            ) : (
-              <LinearGradient
-                colors={[Colors.primary, "#764ba2"]}
-                style={styles.defaultPhoto}
-              >
-                {photoRefreshing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <ThemedText style={styles.defaultPhotoText}>
-                    {displayName.charAt(0).toUpperCase()}
-                  </ThemedText>
-                )}
-              </LinearGradient>
-            )}
-          </View>
-        </TouchableOpacity>
+            <View style={styles.photoContainer}>
+              {userPhotoUrl && !photoRefreshing ? (
+                <Image
+                  source={{ uri: userPhotoUrl }}
+                  style={styles.profilePhoto}
+                  onError={() => setUserPhotoUrl(null)}
+                />
+              ) : (
+                <LinearGradient
+                  colors={[Colors.primary, "#764ba2"]}
+                  style={styles.defaultPhoto}
+                >
+                  {photoRefreshing ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <ThemedText style={styles.defaultPhotoText}>
+                      {displayName.charAt(0).toUpperCase()}
+                    </ThemedText>
+                  )}
+                </LinearGradient>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {/* Theme Toggle */}
+          <TouchableOpacity
+            style={[styles.themeToggle, { backgroundColor: theme.uiBackground }]}
+            onPress={toggleTheme}
+          >
+            <Ionicons
+              name={isDark ? 'sunny' : 'moon'}
+              size={18}
+              color={Colors.primary}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search and Filter Row */}
@@ -301,11 +327,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  appName: {
-    fontSize: 18,
+  appNameContainer: {
+    marginLeft: 4,
+  },
+  appNameLine: {
+    fontSize: 7,
     fontWeight: "bold",
-    marginLeft: 8,
     color: Colors.primary,
+    lineHeight: 8,
+    textAlign: "center",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  themeToggle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: "center",
+    alignItems: "center",
   },
   profileContainer: {
     flexDirection: "row",
@@ -357,7 +399,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
     borderRadius: 10,
     paddingHorizontal: 15,
-    paddingVertical: 8,
+    height: 44,
   },
   searchIcon: {
     marginRight: 10,

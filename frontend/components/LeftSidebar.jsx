@@ -11,6 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import ThemedText from "./ThemedText";
 import { Colors } from "../constants/Colors";
+import { useTheme } from "../constants/ThemeContext";
 import { useAuth } from "../hooks/useAuth";
 import { useRouter } from "expo-router";
 
@@ -19,6 +20,8 @@ const { width: screenWidth } = Dimensions.get("window");
 const LeftSidebar = ({ visible, onClose }) => {
   const router = useRouter();
   const { user } = useAuth();
+  const { colorScheme } = useTheme();
+  const theme = Colors[colorScheme] ?? Colors.light;
   const isAdmin = user?.role?.toUpperCase() === "ADMIN";
   const isTransporter = user?.role?.toUpperCase() === "TRANSPORTER";
 
@@ -140,7 +143,7 @@ const LeftSidebar = ({ visible, onClose }) => {
         activeOpacity={1}
         onPress={onClose}
       >
-        <View style={styles.sidebar}>
+        <View style={[styles.sidebar, { backgroundColor: theme.cardBackground }]}>
           <LinearGradient
             colors={[Colors.primary, "#764ba2"]}
             start={{ x: 0, y: 0 }}
@@ -160,7 +163,7 @@ const LeftSidebar = ({ visible, onClose }) => {
             {menuItems.map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.menuItem}
+                style={[styles.menuItem, { backgroundColor: theme.uiBackground }]}
                 onPress={() => handleNavigation(item.route)}
               >
                 <Ionicons name={item.icon} size={24} color={Colors.primary} />
@@ -189,7 +192,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: screenWidth * 0.75,
-    backgroundColor: "#fff",
     borderTopRightRadius: 20,
     borderBottomRightRadius: 20,
     overflow: "hidden",
@@ -224,7 +226,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     marginVertical: 5,
     borderRadius: 12,
-    backgroundColor: "#f8f9fa",
     gap: 12,
   },
   menuItemText: {

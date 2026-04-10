@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -15,11 +15,12 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "react-native";
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedCard from "../../components/ThemedCard";
 import { useAuth } from "../../hooks/useAuth";
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from "../../hooks/useAppDispatch";
 import { fetchAuctionById, placeBid } from "../../store/slices/auctionSlice";
 import {
@@ -53,7 +54,7 @@ const categories = {
 const AuctionDetails = () => {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -99,45 +100,24 @@ const AuctionDetails = () => {
   const [timeRemainingDetailed, setTimeRemainingDetailed] = useState("");
   const [isExpired, setIsExpired] = useState(false);
   const [isLastHour, setIsLastHour] = useState(false);
-
-  // Payment State
   const [isFirstBid, setIsFirstBid] = useState(true);
-
-  // Force refresh function
   const refreshAuction = useCallback(async () => {
     if (id) {
-      console.log("Refreshing auction data...");
       await dispatch(fetchAuctionById(id)).unwrap();
       setForceRefresh((prev) => prev + 1);
     }
   }, [id, dispatch]);
-
-  // Load auction data
   useEffect(() => {
     if (id) {
       loadAuction();
       loadReviews();
     }
   }, [id]);
-
-  // Reload auction when forceRefresh changes
   useEffect(() => {
     if (id && forceRefresh > 0) {
       loadAuction();
     }
-  }, [forceRefresh]);
-
-  // Debug effect
-  useEffect(() => {
-    console.log("=== AUCTION DETAILS DEBUG ===");
-    console.log("Auction ID:", id);
-    console.log("Auction Status:", currentAuction?.status);
-    console.log("User Won:", userWon);
-    console.log("isExpired:", isExpired);
-    console.log("isPaid:", currentAuction?.isPaid);
-    console.log("paymentDeadline:", paymentDeadline);
-    console.log("Auction expireDate:", currentAuction?.expireDate);
-    console.log("================================");
+  }, [forceRefresh]);  useEffect(() => {
   }, [
     currentAuction?.status,
     currentAuction?.isPaid,
@@ -149,23 +129,19 @@ const AuctionDetails = () => {
   ]);
 
   useEffect(() => {
-    // Reset all payment-related state when loading a new auction
     setUserWon(false);
     setPaymentDeadline(null);
     setShowAuctionPaymentModal(false);
     setIsExpired(false);
   }, [id]);
-
-  // Process auction data when it changes
   useEffect(() => {
     if (currentAuction) {
       processAuctionData();
       checkWinnerAndPaymentStatus();
       checkExpiration();
+      calculateTimeRemaining();
     }
   }, [currentAuction, user?.id]);
-
-  // Countdown timer effect
   useEffect(() => {
     let timer;
 
@@ -188,8 +164,6 @@ const AuctionDetails = () => {
       if (timer) clearInterval(timer);
     };
   }, [currentAuction?.expireDate, isExpired, isLastHour]);
-
-  // Payment deadline timer
   useEffect(() => {
     let timer;
 
@@ -219,40 +193,22 @@ const AuctionDetails = () => {
 
   const checkWinnerAndPaymentStatus = () => {
     if (!currentAuction || !user) return;
-
-    console.log("Checking winner and payment status...");
-    console.log("Auction status:", currentAuction?.status);
-    console.log("Auction bidders:", currentAuction?.bidders);
-
-    // Check if auction is ended
     const isAuctionEnded = currentAuction?.status === "ended";
     setIsExpired(isAuctionEnded);
 
     if (isAuctionEnded) {
-      // Check if user is the winner
       const bids = Object.entries(currentAuction?.bidders || {});
-      console.log("Bids entries:", bids);
 
       if (bids.length > 0) {
         const sortedBids = bids.sort((a, b) => b[1] - a[1]);
         const winnerId = sortedBids[0][0];
         const isWinner = winnerId === user.id;
 
-        console.log("Winner ID:", winnerId);
-        console.log("Current user ID:", user.id);
-        console.log("Is winner:", isWinner);
-
         setUserWon(isWinner);
-
-        // Only set payment deadline if user is winner and auction is not paid
         if (isWinner && !currentAuction?.isPaid && currentAuction?.expireDate) {
           const expireDate = new Date(currentAuction?.expireDate);
           const deadline = new Date(expireDate.getTime() + 24 * 60 * 60 * 1000);
           const now = new Date();
-
-          console.log("Expire date:", expireDate);
-          console.log("Payment deadline:", deadline);
-          console.log("Now:", now);
 
           if (now <= deadline) {
             setPaymentDeadline(deadline);
@@ -267,7 +223,6 @@ const AuctionDetails = () => {
         setPaymentDeadline(null);
       }
     } else {
-      // Reset winner state if auction is not ended
       setUserWon(false);
       setPaymentDeadline(null);
     }
@@ -339,32 +294,21 @@ const AuctionDetails = () => {
 
   const loadAuction = async () => {
     try {
-      console.log("Loading auction with ID:", id);
       const result = await dispatch(fetchAuctionById(id)).unwrap();
-      console.log("Auction loaded:", result);
-      console.log("Auction status:", result?.status);
-      console.log("Auction isPaid:", result?.isPaid);
-      console.log("Auction expireDate:", result?.expireDate);
-      console.log("Auction bidders:", result?.bidders);
     } catch (error) {
       console.error("Error loading auction:", error);
-      Alert.alert("Erreur", "Échec du chargement des détails");
+      showAlert("Erreur", "Échec du chargement des détails");
     }
   };
 
   const processAuctionData = async () => {
-    // Load auction photos
     if (currentAuction?.photoId?.length > 0) {
       const photos = currentAuction?.photoId.map((photoId) =>
         auctionService.getAuctionPhotoUrl(currentAuction?.id, photoId),
       );
       setAuctionPhotos(photos);
     }
-
-    // Process bidders
     processBidders();
-
-    // Load seller details
     await loadSellerDetails();
   };
 
@@ -508,17 +452,17 @@ const AuctionDetails = () => {
   // Bid handlers
   const handlePlaceBid = () => {
     if (!user) {
-      Alert.alert("Connexion requise", "Veuillez vous connecter pour enchérir");
+      showAlert("Connexion requise", "Veuillez vous connecter pour enchérir");
       return;
     }
 
     if (isExpired) {
-      Alert.alert("Enchère terminée", "Cette enchère est expirée");
+      showAlert("Enchère terminée", "Cette enchère est expirée");
       return;
     }
 
     if (currentAuction?.sellerId === user.id) {
-      Alert.alert(
+      showAlert(
         "Action non autorisée",
         "Vous ne pouvez pas enchérir sur votre propre enchère",
       );
@@ -543,14 +487,14 @@ const AuctionDetails = () => {
   };
 
   const handleAuctionPaymentComplete = async () => {
-    Alert.alert("Succès", "Paiement effectué avec succès !");
+    showAlert("Succès", "Paiement effectué avec succès !");
     setShowAuctionPaymentModal(false);
     await refreshAuction();
   };
 
   const submitBid = async () => {
     if (!bidAmount || isNaN(bidAmount)) {
-      Alert.alert("Erreur", "Veuillez entrer un montant valide");
+      showAlert("Erreur", "Veuillez entrer un montant valide");
       return;
     }
 
@@ -558,7 +502,7 @@ const AuctionDetails = () => {
     const minBid = highestBid + 1;
 
     if (amount < minBid) {
-      Alert.alert(
+      showAlert(
         "Montant invalide",
         `Votre enchère doit être d'au moins ${minBid} TND`,
       );
@@ -578,16 +522,16 @@ const AuctionDetails = () => {
       setBidAmount("");
       await refreshAuction();
 
-      Alert.alert("Succès", "Votre enchère a été placée avec succès");
+      showAlert("Succès", "Votre enchère a été placée avec succès");
     } catch (error) {
-      Alert.alert("Erreur", error.message || "Échec du placement de l'enchère");
+      showAlert("Erreur", error.message || "Échec du placement de l'enchère");
     }
   };
 
   // Review handlers
   const handleAddReview = async () => {
     if (!user) {
-      Alert.alert(
+      showAlert(
         "Connexion requise",
         "Veuillez vous connecter pour publier un avis",
       );
@@ -595,7 +539,7 @@ const AuctionDetails = () => {
     }
 
     if (!reviewText.trim()) {
-      Alert.alert("Erreur", "Veuillez entrer un commentaire");
+      showAlert("Erreur", "Veuillez entrer un commentaire");
       return;
     }
 
@@ -608,19 +552,19 @@ const AuctionDetails = () => {
         }),
       ).unwrap();
 
-      Alert.alert("Succès", "Votre avis a été ajouté");
+      showAlert("Succès", "Votre avis a été ajouté");
       setShowAddReviewModal(false);
       setReviewText("");
       await loadReviews();
     } catch (error) {
       console.error("Add review error:", error);
-      Alert.alert("Erreur", error.message || "Échec de l'ajout de l'avis");
+      showAlert("Erreur", error.message || "Échec de l'ajout de l'avis");
     }
   };
 
   const handleUpdateReview = async () => {
     if (!editReviewText.trim()) {
-      Alert.alert("Erreur", "Veuillez entrer un commentaire");
+      showAlert("Erreur", "Veuillez entrer un commentaire");
       return;
     }
 
@@ -634,7 +578,7 @@ const AuctionDetails = () => {
         }),
       ).unwrap();
 
-      Alert.alert("Succès", "Votre avis a été modifié");
+      showAlert("Succès", "Votre avis a été modifié");
       setShowAddReviewModal(false);
       setEditReviewText("");
       setEditingReview(null);
@@ -642,44 +586,37 @@ const AuctionDetails = () => {
       await loadReviews();
     } catch (error) {
       console.error("Update review error:", error);
-      Alert.alert("Erreur", error.message || "Échec de la modification");
+      showAlert("Erreur", error.message || "Échec de la modification");
     }
   };
 
   const handleDeleteReview = async (reviewTextToDelete) => {
     if (!reviewTextToDelete) return;
 
-    Alert.alert(
+    confirmDialog(
       "Supprimer l'avis",
       "Êtes-vous sûr de vouloir supprimer votre avis ?",
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Supprimer",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await dispatch(
-                deleteReview({
-                  auctionId: id,
-                  reviewerId: user.id,
-                  review: reviewTextToDelete,
-                }),
-              ).unwrap();
+      async () => {
+        try {
+          await dispatch(
+            deleteReview({
+              auctionId: id,
+              reviewerId: user.id,
+              review: reviewTextToDelete,
+            }),
+          ).unwrap();
 
-              Alert.alert("Succès", "Votre avis a été supprimé");
-              setShowAddReviewModal(false);
-              setUserReview(null);
-              setEditingReview(null);
-              setOpenReviewMenuId(null);
-              await loadReviews();
-            } catch (error) {
-              console.error("Delete review error:", error);
-              Alert.alert("Erreur", "Échec de la suppression");
-            }
-          },
-        },
-      ],
+          showAlert("Succès", "Votre avis a été supprimé");
+          setShowAddReviewModal(false);
+          setUserReview(null);
+          setEditingReview(null);
+          setOpenReviewMenuId(null);
+          await loadReviews();
+        } catch (error) {
+          console.error("Delete review error:", error);
+          showAlert("Erreur", "Échec de la suppression");
+        }
+      }
     );
   };
 
@@ -1078,16 +1015,10 @@ const AuctionDetails = () => {
                     style={styles.addReviewButton}
                     onPress={() => {
                       if (!user) {
-                        Alert.alert(
+                        confirmDialog(
                           "Connexion requise",
                           "Veuillez vous connecter pour publier un avis",
-                          [
-                            { text: "Annuler", style: "cancel" },
-                            {
-                              text: "Se connecter",
-                              onPress: () => router.push("/(auth)/login"),
-                            },
-                          ],
+                          () => router.push("/(auth)/login"),
                         );
                       } else {
                         setEditingReview(null);
@@ -1651,6 +1582,7 @@ const AuctionDetails = () => {
         onPaymentComplete={handleAuctionPaymentComplete}
         auctionId={id}
         amount={highestBid}
+        isCreationFee={false}
       />
     </ThemedView>
   );

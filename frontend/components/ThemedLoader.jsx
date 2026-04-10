@@ -1,9 +1,10 @@
+import { useTheme } from '../constants/ThemeContext'
 import { Colors } from '../constants/Colors'
-import { ActivityIndicator, useColorScheme } from "react-native"
+import { ActivityIndicator } from "react-native"
 import ThemedView from "./ThemedView"
 
 const ThemedLoader = () => {
-    const colorScheme = useColorScheme()
+    const { colorScheme } = useTheme()
     const theme = Colors[colorScheme] ?? Colors.light
 
     return (

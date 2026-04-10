@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -11,11 +11,12 @@ import {
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "react-native";
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedCard from "../../components/ThemedCard";
 import { useAuth } from "../../hooks/useAuth";
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from "../../hooks/useAppDispatch";
 import {
   fetchParcelsByTransporter,
@@ -26,7 +27,7 @@ import AuthGuard from "../../components/auth/AuthGuard";
 
 const TransporterHome = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -77,7 +78,7 @@ const TransporterHome = () => {
   };
 
   const handleDeliverParcel = async (parcelId) => {
-    Alert.alert("Livraison", "Confirmez-vous que ce colis a été livré ?", [
+    showAlert("Livraison", "Confirmez-vous que ce colis a été livré ?", [
       { text: "Annuler", style: "cancel" },
       {
         text: "Confirmer",
@@ -85,10 +86,10 @@ const TransporterHome = () => {
           try {
             setProcessingParcelId(parcelId);
             await dispatch(deliverParcel(parcelId)).unwrap();
-            Alert.alert("Succès", "Colis marqué comme livré");
+            showAlert("Succès", "Colis marqué comme livré");
             await loadParcels();
           } catch (error) {
-            Alert.alert("Erreur", "Échec de la mise à jour");
+            showAlert("Erreur", "Échec de la mise à jour");
           } finally {
             setProcessingParcelId(null);
           }
@@ -187,7 +188,7 @@ const TransporterHome = () => {
                 key={parcel.id}
                 onPress={() => handleParcelPress(parcel.id)}
               >
-                <ThemedCard style={styles.parcelCard}>
+                <ThemedCard elevated={false} style={styles.parcelCard}>
                   <View style={styles.parcelHeader}>
                     <View style={styles.parcelId}>
                       <Ionicons name="cube" size={20} color={Colors.primary} />

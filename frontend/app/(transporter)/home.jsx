@@ -11,7 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "react-native";
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from "../../components/ThemedView";
 import ThemedText from "../../components/ThemedText";
 import ThemedCard from "../../components/ThemedCard";
@@ -21,7 +21,7 @@ import AuthGuard from "../../components/auth/AuthGuard";
 
 const TransporterInfo = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme, toggleTheme, isDark } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
 
@@ -44,12 +44,20 @@ const TransporterInfo = () => {
         >
           <View style={styles.headerContent}>
             <ThemedText style={styles.headerTitle}>Transporteur</ThemedText>
-            <TouchableOpacity
-              onPress={() => router.push("/(dashboard)/profile")}
-              style={styles.profileButton}
-            >
-              <Ionicons name="person-circle" size={32} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.themeToggle}
+                onPress={toggleTheme}
+              >
+                <Ionicons name={isDark ? 'sunny' : 'moon'} size={20} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push("/(dashboard)/profile")}
+                style={styles.profileButton}
+              >
+                <Ionicons name="person-circle" size={32} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
         </LinearGradient>
 
@@ -151,6 +159,19 @@ const styles = StyleSheet.create({
   },
   profileButton: {
     padding: 5,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  themeToggle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

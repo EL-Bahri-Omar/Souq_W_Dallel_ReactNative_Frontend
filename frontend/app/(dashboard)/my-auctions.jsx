@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'react-native';
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
 import AuctionCard from '../../components/AuctionCard';
@@ -21,7 +21,7 @@ import { Colors } from '../../constants/Colors';
 
 const MyAuctions = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();

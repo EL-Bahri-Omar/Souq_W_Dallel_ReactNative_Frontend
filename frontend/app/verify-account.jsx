@@ -6,7 +6,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme,
   TextInput,
   ActivityIndicator,
   ScrollView
@@ -21,12 +20,14 @@ import ThemedButton from '../components/ThemedButton';
 import ThemedCard from '../components/ThemedCard';
 import Spacer from '../components/Spacer';
 import { Colors } from '../constants/Colors';
+import { confirmDialog, showAlert } from '../utils/alertHelper';
 import { useAppDispatch } from '../hooks/useAppDispatch';
 import { verifyAccount } from '../store/slices/authSlice';
+import { useTheme } from "../constants/ThemeContext";
 
 const VerifyAccount = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] || Colors.light;
   const dispatch = useAppDispatch();
   
@@ -73,7 +74,7 @@ const VerifyAccount = () => {
         }
         
         if (!savedCode || !savedEmail) {
-          Alert.alert(
+          showAlert(
             'No Verification Found',
             'Please register first to get a verification code.',
             [{ text: 'OK', onPress: () => router.replace('/(auth)/register') }]
@@ -123,17 +124,17 @@ const VerifyAccount = () => {
     const verificationCode = code.join('');
     
     if (verificationCode.length !== 6) {
-      Alert.alert('Error', 'Please enter the 6-digit code');
+      showAlert('Error', 'Please enter the 6-digit code');
       return;
     }
 
     if (verificationCode !== storedCode) {
-      Alert.alert('Invalid Code', 'The code you entered does not match. Please try again.');
+      showAlert('Invalid Code', 'The code you entered does not match. Please try again.');
       return;
     }
 
     if (!userPassword || userPassword.trim() === '') {
-      Alert.alert(
+      showAlert(
         'Auto-login Not Possible',
         'Cannot auto-login: Password not available. Please login manually after verification.',
         [{ 
@@ -153,7 +154,7 @@ const VerifyAccount = () => {
         password: userPassword
       })).unwrap();
       
-      Alert.alert(
+      showAlert(
         'Success!', 
         'Account verified and logged in successfully!',
         [{ 
@@ -173,7 +174,7 @@ const VerifyAccount = () => {
       }
       
       if (errorMessage.includes('Auto-login failed') || errorMessage.includes('Please login manually')) {
-        Alert.alert(
+        showAlert(
           'Account Activated', 
           'Your account has been activated successfully, but auto-login failed. Please login manually.',
           [{ 
@@ -189,7 +190,7 @@ const VerifyAccount = () => {
           }]
         );
       } else {
-        Alert.alert(
+        showAlert(
           'Verification Failed', 
           errorMessage,
           [{ text: 'OK' }]
@@ -204,7 +205,7 @@ const VerifyAccount = () => {
     setLoading(true);
     
     try {
-      Alert.alert(
+      showAlert(
         'Account Activated', 
         'Your account has been activated successfully. Please login with your credentials.',
         [{ 
@@ -221,7 +222,7 @@ const VerifyAccount = () => {
       );
       
     } catch (error) {
-      Alert.alert('Error', 'Verification failed. Please try again.');
+      showAlert('Error', 'Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -229,14 +230,14 @@ const VerifyAccount = () => {
 
   const handleResendCode = async () => {
     if (countdown > 0) {
-      Alert.alert('Please Wait', `Please wait ${countdown} seconds before requesting a new code.`);
+      showAlert('Please Wait', `Please wait ${countdown} seconds before requesting a new code.`);
       return;
     }
 
     setResendLoading(true);
 
     try {
-      Alert.alert(
+      showAlert(
         'Info',
         'To get a new verification code, please try logging in with your credentials.',
         [{ text: 'OK' }]
@@ -245,7 +246,7 @@ const VerifyAccount = () => {
       setCountdown(60);
       
     } catch (error) {
-      Alert.alert('Error', 'Failed to resend code');
+      showAlert('Error', 'Failed to resend code');
     } finally {
       setResendLoading(false);
     }

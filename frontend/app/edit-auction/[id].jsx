@@ -15,7 +15,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useColorScheme } from 'react-native';
+import { useTheme } from '../../constants/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
@@ -54,7 +54,7 @@ const daysOfWeek = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'];
 const EditAuction = () => {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const dispatch = useAppDispatch();
   const { currentAuction, loading, updating } = useAppSelector((state) => state.auction);

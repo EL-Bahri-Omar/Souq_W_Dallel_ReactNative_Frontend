@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,10 +10,11 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useColorScheme } from 'react-native';
+import { useTheme } from "../../constants/ThemeContext";
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
 import { useAuth } from '../../hooks/useAuth';
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import {
   fetchNotifications,
@@ -27,7 +28,7 @@ import { userService } from '../../store/services/userService';
 
 const Notifications = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -50,8 +51,6 @@ const Notifications = () => {
       const names = {};
       for (const notification of notifications) {
         if (notification.type === 'BID_PLACED' && notification.message.includes('a placé une enchère')) {
-          // Try to extract bidder ID from message or metadata
-          // This assumes your backend sends bidderId in the notification
           if (notification.bidderId && !names[notification.bidderId]) {
             try {
               const bidder = await userService.getUserById(notification.bidderId);
@@ -91,7 +90,6 @@ const Notifications = () => {
     if (selectionMode) {
       toggleSelection(notification.id);
     } else {
-      // Mark as read if not already read
       if (!notification.read) {
         await dispatch(markAsRead(notification.id));
       }
@@ -124,7 +122,7 @@ const Notifications = () => {
       setSelectedIds([]);
       setSelectionMode(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
+      showAlert('Erreur', 'Impossible de marquer les notifications comme lues');
     }
   };
 
@@ -196,7 +194,7 @@ const Notifications = () => {
         delayLongPress={300}
         style={[
           styles.notificationItem,
-          !item.read && styles.unreadItem,
+          !item.read && { backgroundColor: theme.surfaceBackground },
           selectionMode && selectedIds.includes(item.id) && styles.selectedItem
         ]}
       >
@@ -229,13 +227,13 @@ const Notifications = () => {
             <Ionicons
               name={selectedIds.includes(item.id) ? 'checkbox' : 'square-outline'}
               size={22}
-              color={selectedIds.includes(item.id) ? Colors.primary : '#ccc'}
+              color={selectedIds.includes(item.id) ? Colors.primary : theme.mutedText}
               style={styles.checkbox}
             />
           )}
         </View>
       </TouchableOpacity>
-      <View style={styles.separator} />
+      <View style={[styles.separator, { backgroundColor: theme.borderColor }]} />
     </View>
   );
 
@@ -297,7 +295,7 @@ const Notifications = () => {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={60} color="#ccc" />
+            <Ionicons name="notifications-off-outline" size={60} color={theme.mutedText} />
             <ThemedText style={styles.emptyText}>
               Aucune notification
             </ThemedText>

@@ -10,6 +10,7 @@ import ThemedTextInput from '../../components/ThemedTextInput';
 import Spacer from '../../components/Spacer';
 import { Colors } from '../../constants/Colors';
 import { useAuth } from '../../hooks/useAuth';
+import { showAlert } from '../../utils/alertHelper';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -19,7 +20,7 @@ const Login = () => {
 
   const handleSubmit = async () => {
     if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez entrer votre email et mot de passe');
+      showAlert('Erreur', 'Veuillez entrer votre email et mot de passe');
       return;
     }
     
@@ -33,14 +34,11 @@ const Login = () => {
           await AsyncStorage.setItem('pendingRegistrationPassword', password);
         }
         
-        Alert.alert(
+        showAlert(
           'Vérification requise',
           'Votre compte nécessite une vérification. Un nouveau code a été envoyé à votre email.',
-          [{ 
-            text: 'Entrer le code', 
-            onPress: () => router.replace('/verify-account') 
-          }]
         );
+        router.replace('/verify-account');
         return;
       }
       
@@ -50,7 +48,7 @@ const Login = () => {
         errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion.';
       }
       
-      Alert.alert('Erreur de connexion', errorMessage);
+      showAlert('Erreur de connexion', errorMessage);
     }
   };
 

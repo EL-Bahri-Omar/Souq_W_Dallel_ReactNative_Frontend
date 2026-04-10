@@ -1,4 +1,4 @@
-export const API_BASE_URL = "http://192.168.100.20:8080";
+export const API_BASE_URL = "http://192.168.1.6:8080";
 
 export const API_ENDPOINTS = {
   // Auth endpoints
@@ -77,7 +77,7 @@ export const API_ENDPOINTS = {
   // Parcel endpoints
   GET_ALL_PARCELS: "/api/parcels/getAll",
   GET_PARCEL_BY_ID: (id) => `/api/parcels/${id}`,
-  UPDATE_PARCEL: (id) => `/api/parcels/update/${id}`, // Make sure this exists
+  UPDATE_PARCEL: (id) => `/api/parcels/update/${id}`,
   GET_PARCELS_BY_ADMIN: (adminId) => `/api/parcels/admin/${adminId}`,
   GET_PARCELS_BY_TRANSPORTER: (transporterId) =>
     `/api/parcels/transporter/${transporterId}`,

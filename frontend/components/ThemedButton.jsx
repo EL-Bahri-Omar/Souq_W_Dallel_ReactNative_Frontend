@@ -1,8 +1,9 @@
-import { StyleSheet, Pressable, useColorScheme } from 'react-native';
+import { useTheme } from '../constants/ThemeContext'
+import { StyleSheet, Pressable } from 'react-native';
 import { Colors } from '../constants/Colors';
 
 const ThemedButton = ({ style, variant = 'primary', ...props }) => {
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   
   const getButtonStyle = () => {

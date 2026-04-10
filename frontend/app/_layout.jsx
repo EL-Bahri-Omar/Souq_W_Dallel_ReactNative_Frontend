@@ -1,5 +1,5 @@
-import { useColorScheme } from "react-native";
-import { Tabs, Stack, useRouter } from "expo-router";
+import { useTheme, ThemeProvider } from "../constants/ThemeContext";
+import { Tabs, Stack, useRouter, Redirect } from "expo-router";
 import { Colors } from "../constants/Colors";
 import { StatusBar } from "expo-status-bar";
 import { Provider, useSelector } from "react-redux";
@@ -12,7 +12,7 @@ import { useDispatch } from "react-redux";
 import { StyleSheet, View, Text } from "react-native";
 import { fetchNotifications } from "../store/slices/notificationSlice";
 import { PersistGate } from "redux-persist/integration/react";
-import { StripeProvider } from "@stripe/stripe-react-native";
+import { StripeProvider } from "../lib/stripe";
 import {
   startExpirationChecker,
   stopExpirationChecker,
@@ -20,13 +20,15 @@ import {
 
 export default function RootLayout() {
   return (
-    <Provider store={store}>
-      <PersistGate loading={null} persistor={persistor}>
-        <InitializeAuth />
-        <StatusBar style="auto" />
-        <AppContent />
-      </PersistGate>
-    </Provider>
+    <ThemeProvider>
+      <Provider store={store}>
+        <PersistGate loading={null} persistor={persistor}>
+          <InitializeAuth />
+          <StatusBar style="auto" />
+          <AppContent />
+        </PersistGate>
+      </Provider>
+    </ThemeProvider>
   );
 }
 
@@ -57,7 +59,7 @@ function InitializeAuth() {
 
 function AppContent() {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { token, user } = useSelector((state) => state.auth);
   const { unreadCount } = useSelector(
@@ -105,13 +107,16 @@ function AppContent() {
 
   if (!token) {
     return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="verify-account" />
-        <Stack.Screen name="reset-password" />
-        <Stack.Screen name="reset-password-verify" />
-        <Stack.Screen name="index" />
-      </Stack>
+      <>
+        <Redirect href="/(auth)/login" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="verify-account" />
+          <Stack.Screen name="reset-password" />
+          <Stack.Screen name="reset-password-verify" />
+          <Stack.Screen name="index" options={{ href: null }} />
+        </Stack>
+      </>
     );
   }
 

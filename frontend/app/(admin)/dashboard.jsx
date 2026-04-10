@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -15,13 +15,14 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'react-native';
+import { useTheme } from '../../constants/ThemeContext';
 import { BarChart, PieChart, LineChart } from 'react-native-chart-kit';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
 import ThemedCard from '../../components/ThemedCard';
 import { useAuth } from '../../hooks/useAuth';
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { 
   fetchAllAuctions, 
@@ -46,13 +47,11 @@ import { Colors } from '../../constants/Colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isLargeScreen = screenWidth >= 768;
-
-// Allowed notification types for admin
 const ADMIN_NOTIFICATION_TYPES = ['AUCTION_PENDING', 'PARCEL_INVALID'];
 
 const AdminDashboard = () => {
   const router = useRouter();
-  const colorScheme = useColorScheme();
+  const { colorScheme, toggleTheme, isDark } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -138,8 +137,6 @@ const AdminDashboard = () => {
     pendingParcels: 0,
     deliveredParcels: 0
   });
-
-  // Use refs to prevent unnecessary re-renders
   const isMounted = useRef(true);
   const dataLoaded = useRef(false);
 
@@ -201,8 +198,6 @@ const AdminDashboard = () => {
 
   const loadUserNames = async () => {
     const nameMap = {};
-    
-    // Load seller names for auctions
     for (const auction of auctions) {
       if (auction.sellerId && !nameMap[auction.sellerId]) {
         try {
@@ -215,8 +210,6 @@ const AdminDashboard = () => {
         }
       }
     }
-    
-    // Load buyer names for parcels
     for (const parcel of adminParcelsList) {
       if (parcel.buyerId && !nameMap[parcel.buyerId]) {
         try {
@@ -239,8 +232,6 @@ const AdminDashboard = () => {
           nameMap[parcel.transporterId] = `Transporteur #${parcel.transporterId.substring(0, 8)}`;
         }
       }
-      
-      // Load seller for parcel
       if (parcel.auctionId) {
         const auction = auctions.find(a => a.id === parcel.auctionId);
         if (auction?.sellerId && !nameMap[auction.sellerId]) {
@@ -263,8 +254,9 @@ const AdminDashboard = () => {
 
   const loadDashboardData = async () => {
     try {
-      await dispatch(fetchAllAuctions()).unwrap();
-      await dispatch(fetchAllDeposits()).unwrap(); 
+      const freshAuctions = await dispatch(fetchAllAuctions()).unwrap();
+      const freshDeposits = await dispatch(fetchAllDeposits()).unwrap();
+      const freshParcels = await dispatch(fetchAllParcels()).unwrap();
       
       const usersData = await userService.getAllUsers();
       const transportersData = await userService.getAllTransporters();
@@ -272,9 +264,14 @@ const AdminDashboard = () => {
       if (isMounted.current) {
         setUsers(usersData);
         setTransporters(transportersData);
+        const parcelsArray = freshParcels || [];
+        setAllParcels(parcelsArray);
+        const filteredParcels = parcelsArray.filter(p => {
+          if (!p.adminId) return true;
+          return p.adminId === user?.id;
+        });
+        setAdminParcels(filteredParcels);
       }
-      
-      // Load admin notifications - filter only allowed types
       if (user?.id) {
         const result = await dispatch(fetchNotifications(user.id)).unwrap();
         const filtered = result.filter(notif => 
@@ -285,12 +282,17 @@ const AdminDashboard = () => {
         }
       }
       
-      calculateStats(usersData, auctions, deposits, adminParcelsList);
+      const parcelsArray = freshParcels || [];
+      const filteredParcels = parcelsArray.filter(p => {
+        if (!p.adminId) return true;
+        return p.adminId === user?.id;
+      });
+      calculateStats(usersData, freshAuctions || [], freshDeposits || [], filteredParcels);
       
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       if (isMounted.current) {
-        Alert.alert('Erreur', 'Impossible de charger certaines données');
+        showAlert('Erreur', 'Impossible de charger certaines données');
       }
     }
   };
@@ -454,7 +456,7 @@ const AdminDashboard = () => {
       setAuctionModalVisible(true);
     } catch (error) {
       console.error('Error loading auction details:', error);
-      Alert.alert('Erreur', 'Impossible de charger les détails de l\'enchère');
+      showAlert('Erreur', 'Impossible de charger les détails de l\'enchère');
     }
   };
 
@@ -464,53 +466,40 @@ const AdminDashboard = () => {
   };
 
   const handleApproveAuction = async (auctionId) => {
-    Alert.alert(
+    confirmDialog(
       'Approuver l\'enchère',
       'Êtes-vous sûr de vouloir approuver cette enchère ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Approuver',
-          onPress: async () => {
-            try {
-              setProcessingAuctionId(auctionId);
-              await dispatch(approveAuction({ auctionId, adminId: user.id })).unwrap();
-              Alert.alert('Succès', 'Enchère approuvée avec succès');
-              await refreshData();
-            } catch (error) {
-              Alert.alert('Erreur', 'Échec de l\'approbation');
-            } finally {
-              setProcessingAuctionId(null);
-            }
-          }
+      async () => {
+        try {
+          setProcessingAuctionId(auctionId);
+          await dispatch(approveAuction({ auctionId, adminId: user.id })).unwrap();
+          showAlert('Succès', 'Enchère approuvée avec succès');
+          await refreshData();
+        } catch (error) {
+          showAlert('Erreur', 'Échec de l\'approbation');
+        } finally {
+          setProcessingAuctionId(null);
         }
-      ]
+      }
     );
   };
 
   const handleDenyAuction = async (auctionId) => {
-    Alert.alert(
+    confirmDialog(
       'Refuser l\'enchère',
       'Êtes-vous sûr de vouloir refuser cette enchère ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Refuser',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setProcessingAuctionId(auctionId);
-              await dispatch(denyAuction({ auctionId, adminId: user.id })).unwrap();
-              Alert.alert('Succès', 'Enchère refusée');
-              await refreshData();
-            } catch (error) {
-              Alert.alert('Erreur', 'Échec du refus');
-            } finally {
-              setProcessingAuctionId(null);
-            }
-          }
+      async () => {
+        try {
+          setProcessingAuctionId(auctionId);
+          await dispatch(denyAuction({ auctionId, adminId: user.id })).unwrap();
+          showAlert('Succès', 'Enchère refusée');
+          await refreshData();
+        } catch (error) {
+          showAlert('Erreur', 'Échec du refus');
+        } finally {
+          setProcessingAuctionId(null);
         }
-      ]
+      }
     );
   };
 
@@ -567,7 +556,7 @@ const AdminDashboard = () => {
       setSelectedNotificationIds([]);
       setNotificationSelectionMode(false);
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de marquer les notifications comme lues');
+      showAlert('Erreur', 'Impossible de marquer les notifications comme lues');
     }
   };
 
@@ -591,14 +580,14 @@ const AdminDashboard = () => {
     setBlockLoading(true);
     try {
       await userService.blockUserWithDays(selectedUserForBlock, parseInt(blockDays));
-      Alert.alert('Succès', `Utilisateur bloqué pour ${blockDays} jours`);
+      showAlert('Succès', `Utilisateur bloqué pour ${blockDays} jours`);
       const updatedUsers = await userService.getAllUsers();
       setUsers(updatedUsers);
       setBlockModalVisible(false);
       setSelectedUserForBlock(null);
     } catch (error) {
       console.error('Error blocking user:', error);
-      Alert.alert('Erreur', 'Échec du blocage. Veuillez réessayer.');
+      showAlert('Erreur', 'Échec du blocage. Veuillez réessayer.');
     } finally {
       setBlockLoading(false);
     }
@@ -609,12 +598,12 @@ const AdminDashboard = () => {
     setProcessingUserId(userId);
     try {
       await userService.unblockUser(userId);
-      Alert.alert('Succès', 'Utilisateur débloqué avec succès');
+      showAlert('Succès', 'Utilisateur débloqué avec succès');
       const updatedUsers = await userService.getAllUsers();
       setUsers(updatedUsers);
     } catch (error) {
       console.error('Error unblocking user:', error);
-      Alert.alert('Erreur', 'Échec du déblocage. Veuillez réessayer.');
+      showAlert('Erreur', 'Échec du déblocage. Veuillez réessayer.');
     } finally {
       setUnblockLoading(false);
       setProcessingUserId(null);
@@ -626,20 +615,20 @@ const AdminDashboard = () => {
       setProcessingUserId(userId);
       if (currentRole === 'ADMIN') {
         await userService.makeUser(userId);
-        Alert.alert('Succès', 'Utilisateur rétrogradé en utilisateur standard');
+        showAlert('Succès', 'Utilisateur rétrogradé en utilisateur standard');
       } else if (currentRole === 'Transporter') {
         await userService.makeUser(userId);
-        Alert.alert('Succès', 'Utilisateur rétrogradé en utilisateur standard');
+        showAlert('Succès', 'Utilisateur rétrogradé en utilisateur standard');
       } else {
         await userService.makeAdmin(userId);
-        Alert.alert('Succès', 'Utilisateur promu administrateur');
+        showAlert('Succès', 'Utilisateur promu administrateur');
       }
       const updatedUsers = await userService.getAllUsers();
       setUsers(updatedUsers);
       const updatedTransporters = await userService.getAllTransporters();
       setTransporters(updatedTransporters);
     } catch (error) {
-      Alert.alert('Erreur', 'Échec de la modification du rôle');
+      showAlert('Erreur', 'Échec de la modification du rôle');
     } finally {
       setProcessingUserId(null);
     }
@@ -649,13 +638,13 @@ const AdminDashboard = () => {
     try {
       setProcessingUserId(userId);
       await userService.makeTransporter(userId);
-      Alert.alert('Succès', 'Utilisateur promu transporteur');
+      showAlert('Succès', 'Utilisateur promu transporteur');
       const updatedUsers = await userService.getAllUsers();
       setUsers(updatedUsers);
       const updatedTransporters = await userService.getAllTransporters();
       setTransporters(updatedTransporters);
     } catch (error) {
-      Alert.alert('Erreur', 'Échec de la promotion');
+      showAlert('Erreur', 'Échec de la promotion');
     } finally {
       setProcessingUserId(null);
     }
@@ -665,13 +654,13 @@ const AdminDashboard = () => {
     try {
       setProcessingUserId(userId);
       await userService.removeTransporter(userId);
-      Alert.alert('Succès', 'Utilisateur rétrogradé de transporteur');
+      showAlert('Succès', 'Utilisateur rétrogradé de transporteur');
       const updatedUsers = await userService.getAllUsers();
       setUsers(updatedUsers);
       const updatedTransporters = await userService.getAllTransporters();
       setTransporters(updatedTransporters);
     } catch (error) {
-      Alert.alert('Erreur', 'Échec de la rétrogradation');
+      showAlert('Erreur', 'Échec de la rétrogradation');
     } finally {
       setProcessingUserId(null);
     }
@@ -680,53 +669,47 @@ const AdminDashboard = () => {
   const handleUpdateParcel = async () => {
     if (!selectedParcelForAssign) return;
     if (!pickUpAdress.trim() || !destinationAdress.trim()) {
-      Alert.alert('Erreur', 'Veuillez remplir toutes les adresses');
+      showAlert('Erreur', 'Veuillez remplir toutes les adresses');
       return;
     }
 
-    Alert.alert(
+    confirmDialog(
       'Confirmation',
       'Voulez-vous modifier les informations de ce colis ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          onPress: async () => {
-            try {
-              setProcessingParcelId(selectedParcelForAssign.id);
-              
-              const parcelData = {
-                pickUpAdress: pickUpAdress,
-                destinationAdress: destinationAdress,
-                adminId: user.id
-              };
-              
-              if (selectedTransporterId) {
-                parcelData.transporterId = selectedTransporterId;
-              }
-              
-              await dispatch(updateParcel({ 
-                id: selectedParcelForAssign.id, 
-                parcelData: parcelData
-              })).unwrap();
-              
-              Alert.alert('Succès', 'Colis mis à jour avec succès');
-              setAssignModalVisible(false);
-              setPickUpAdress('');
-              setDestinationAdress('');
-              setSelectedParcelForAssign(null);
-              setSelectedTransporterId(null);
-              await loadParcels();
-              await loadDashboardData();
-            } catch (error) {
-              console.error('Error updating parcel:', error);
-              Alert.alert('Erreur', 'Échec de la mise à jour');
-            } finally {
-              setProcessingParcelId(null);
-            }
+      async () => {
+        try {
+          setProcessingParcelId(selectedParcelForAssign.id);
+          
+          const parcelData = {
+            pickUpAdress: pickUpAdress,
+            destinationAdress: destinationAdress,
+            adminId: user.id
+          };
+          
+          if (selectedTransporterId) {
+            parcelData.transporterId = selectedTransporterId;
           }
+          
+          await dispatch(updateParcel({ 
+            id: selectedParcelForAssign.id, 
+            parcelData: parcelData
+          })).unwrap();
+          
+          showAlert('Succès', 'Colis mis à jour avec succès');
+          setAssignModalVisible(false);
+          setPickUpAdress('');
+          setDestinationAdress('');
+          setSelectedParcelForAssign(null);
+          setSelectedTransporterId(null);
+          await loadParcels();
+          await loadDashboardData();
+        } catch (error) {
+          console.error('Error updating parcel:', error);
+          showAlert('Erreur', 'Échec de la mise à jour');
+        } finally {
+          setProcessingParcelId(null);
         }
-      ]
+      }
     );
   };
 
@@ -1804,7 +1787,7 @@ const AdminDashboard = () => {
 
     return (
       <View style={styles.notificationsContainer}>
-        <View style={styles.notificationsHeader}>
+        <View style={[styles.notificationsHeader, { borderBottomColor: theme.borderColor }]}>
           {unreadNotifications.length > 0 && !notificationSelectionMode && (
             <TouchableOpacity onPress={() => setNotificationSelectionMode(true)}>
               <ThemedText style={styles.selectText}>
@@ -1843,7 +1826,7 @@ const AdminDashboard = () => {
         <ScrollView style={styles.notificationsList}>
           {adminNotifications.length === 0 ? (
             <View style={styles.emptyNotificationsContainer}>
-              <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
+              <Ionicons name="notifications-off-outline" size={48} color={theme.mutedText} />
               <ThemedText style={styles.emptyNotificationsText}>
                 Aucune notification
               </ThemedText>
@@ -1854,7 +1837,8 @@ const AdminDashboard = () => {
                 key={notification.id}
                 style={[
                   styles.notificationItem,
-                  !notification.read && styles.unreadNotificationItem,
+                  { borderBottomColor: theme.borderColor },
+                  !notification.read && { backgroundColor: theme.surfaceBackground },
                   notificationSelectionMode && 
                     selectedNotificationIds.includes(notification.id) && 
                     styles.selectedNotificationItem
@@ -1882,7 +1866,7 @@ const AdminDashboard = () => {
                     ]}>
                       {notification.message}
                     </ThemedText>
-                    <ThemedText style={styles.notificationTime}>
+                    <ThemedText style={[styles.notificationTime, { color: theme.mutedText }]}>
                       {formatTime(notification.createdAt)}
                     </ThemedText>
                   </View>
@@ -1897,7 +1881,7 @@ const AdminDashboard = () => {
                         ? 'checkbox' : 'square-outline'}
                       size={22}
                       color={selectedNotificationIds.includes(notification.id) 
-                        ? Colors.primary : '#ccc'}
+                        ? Colors.primary : theme.mutedText}
                     />
                   )}
                 </View>
@@ -1923,7 +1907,7 @@ const AdminDashboard = () => {
       }}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, styles.assignModalContent]}>
+        <View style={[styles.modalContent, styles.assignModalContent, { backgroundColor: theme.cardBackground }]}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
               Modifier le colis
@@ -2039,7 +2023,7 @@ const AdminDashboard = () => {
       onRequestClose={() => setParcelDetailsModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
               Détails du colis
@@ -2146,7 +2130,7 @@ const AdminDashboard = () => {
       onRequestClose={() => setAuctionModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
               Détails de l'enchère
@@ -2223,7 +2207,7 @@ const AdminDashboard = () => {
       onRequestClose={() => !blockLoading && setBlockModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
           <View style={styles.modalHeader}>
             <ThemedText style={styles.modalTitle}>
               Bloquer l'utilisateur
@@ -2327,7 +2311,18 @@ const AdminDashboard = () => {
               {activeMenu === 'transporters' && 'Gestion des transporteurs'}
               {activeMenu === 'notifications' && 'Notifications'}
             </ThemedText>
-            <View style={styles.headerRight} />
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={[styles.themeToggleBtn, { backgroundColor: theme.uiBackground }]}
+                onPress={toggleTheme}
+              >
+                <Ionicons
+                  name={isDark ? 'sunny' : 'moon'}
+                  size={18}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView 
@@ -2370,7 +2365,8 @@ const styles = StyleSheet.create({
     width: 280, 
     backgroundColor: '#1e1a2e', 
     borderRightWidth: 1, 
-    borderRightColor: '#2d2a3e' 
+    borderRightColor: '#2d2a3e',
+    marginBottom: -90
   },
   sidebarMobile: { 
     position: 'absolute', 
@@ -2464,7 +2460,15 @@ const styles = StyleSheet.create({
     flex: 1 
   },
   headerRight: { 
-    width: 40 
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  themeToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   contentScroll: { 
     flex: 1 
@@ -3025,7 +3029,6 @@ const styles = StyleSheet.create({
   },
   notificationsContainer: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   notificationsHeader: {
     flexDirection: 'row',
@@ -3034,7 +3037,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   notificationsTitle: {
     fontSize: 18,
@@ -3047,10 +3049,8 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   unreadNotificationItem: {
-    backgroundColor: '#f8f9fa',
   },
   selectedNotificationItem: {
     backgroundColor: Colors.primary + '10',
@@ -3138,7 +3138,6 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
   modalContent: { 
-    backgroundColor: '#fff', 
     borderRadius: 20, 
     padding: 20, 
     width: '90%', 

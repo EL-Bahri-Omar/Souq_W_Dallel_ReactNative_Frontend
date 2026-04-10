@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CardField, useStripe } from "@stripe/stripe-react-native";
+import { CardField, useStripe } from "../lib/stripe";
 import ThemedText from "./ThemedText";
 import ThemedCard from "./ThemedCard";
 import { Colors } from "../constants/Colors";
 import { useAuth } from "../hooks/useAuth";
+import { showAlert } from '../utils/alertHelper';
 import { paymentService } from "../store/services/paymentService";
 
 const AuctionPaymentModal = ({
@@ -34,23 +35,18 @@ const AuctionPaymentModal = ({
     // Validate amount before proceeding
     if (!amount || isNaN(amount) || amount <= 0) {
       console.error("Invalid amount:", amount);
-      Alert.alert("Erreur", "Montant invalide pour le paiement");
+      showAlert("Erreur", "Montant invalide pour le paiement");
       onClose();
       return;
     }
 
     try {
       setInitializing(true);
-      console.log(
-        `Initializing payment for ${isCreationFee ? "creation fees" : "auction"}...`,
-      );
-      console.log(`Amount received: ${amount} TND`);
 
       let response;
       if (isCreationFee) {
         // Convert amount to millimes (Long)
         const amountInMillimes = Math.round(amount * 1000);
-        console.log(`Converting ${amount} TND to ${amountInMillimes} millimes`);
 
         if (isNaN(amountInMillimes) || amountInMillimes <= 0) {
           throw new Error("Invalid amount calculation");
@@ -61,21 +57,18 @@ const AuctionPaymentModal = ({
           amountInMillimes,
         );
       } else {
-        const amountInMillimes = Math.round(amount * 1000);
-        response = await paymentService.payAuction(auctionId, amountInMillimes);
+        response = await paymentService.payAuction(auctionId, amount);
       }
-
-      console.log("Payment intent created:", response.clientSecret);
 
       if (response && response.clientSecret) {
         setClientSecret(response.clientSecret);
       } else {
-        Alert.alert("Erreur", "Réponse de paiement invalide");
+        showAlert("Erreur", "Réponse de paiement invalide");
         onClose();
       }
     } catch (error) {
       console.error("Payment initialization error:", error);
-      Alert.alert(
+      showAlert(
         "Erreur",
         error.message || "Impossible d'initialiser le paiement",
       );
@@ -96,12 +89,12 @@ const AuctionPaymentModal = ({
 
   const handlePayPress = async () => {
     if (!cardDetails?.complete) {
-      Alert.alert("Erreur", "Veuillez remplir tous les champs de la carte");
+      showAlert("Erreur", "Veuillez remplir tous les champs de la carte");
       return;
     }
 
     if (!clientSecret) {
-      Alert.alert("Erreur", "Paiement non initialisé");
+      showAlert("Erreur", "Paiement non initialisé");
       return;
     }
 
@@ -123,16 +116,15 @@ const AuctionPaymentModal = ({
 
       if (error) {
         console.error("Payment confirmation error:", error);
-        Alert.alert("Erreur", error.message || "Échec du paiement");
+        showAlert("Erreur", error.message || "Échec du paiement");
       } else if (paymentIntent) {
-        console.log("Payment successful:", paymentIntent);
-        Alert.alert("Succès", "Paiement effectué avec succès !");
+        showAlert("Succès", "Paiement effectué avec succès !");
         onPaymentComplete();
         onClose();
       }
     } catch (error) {
       console.error("Payment error:", error);
-      Alert.alert("Erreur", error.message || "Échec du paiement");
+      showAlert("Erreur", error.message || "Échec du paiement");
     } finally {
       setLoading(false);
     }

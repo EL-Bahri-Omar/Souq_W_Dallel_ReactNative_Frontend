@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -12,11 +12,12 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'react-native';
+import { useTheme } from '../../constants/ThemeContext';
 import ThemedView from '../../components/ThemedView';
 import ThemedText from '../../components/ThemedText';
 import ThemedCard from '../../components/ThemedCard';
 import { useAuth } from '../../hooks/useAuth';
+import { confirmDialog, showAlert } from '../../utils/alertHelper';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { 
   fetchParcelById, 
@@ -29,7 +30,7 @@ import { userService } from '../../store/services/userService';
 const ParcelDetails = () => {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useTheme();
   const theme = Colors[colorScheme] ?? Colors.light;
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -55,7 +56,7 @@ const ParcelDetails = () => {
     try {
       await dispatch(fetchParcelById(id)).unwrap();
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger les détails du colis');
+      showAlert('Erreur', 'Impossible de charger les détails du colis');
       router.back();
     }
   };
@@ -73,7 +74,7 @@ const ParcelDetails = () => {
     const isValidValue = good !== null ? good : isValid;
     
     if (isValidValue === false && !description.trim()) {
-      Alert.alert('Erreur', 'Veuillez décrire le problème de qualité');
+      showAlert('Erreur', 'Veuillez décrire le problème de qualité');
       return;
     }
 
@@ -85,12 +86,12 @@ const ParcelDetails = () => {
         description: isValidValue ? '' : description.trim()
       })).unwrap();
       
-      Alert.alert('Succès', 'Votre évaluation a été enregistrée');
+      showAlert('Succès', 'Votre évaluation a été enregistrée');
       setShowQualityModal(false);
       setDescription('');
       await loadParcel();
     } catch (error) {
-      Alert.alert('Erreur', 'Échec de l\'enregistrement');
+      showAlert('Erreur', 'Échec de l\'enregistrement');
     } finally {
       setSubmitting(false);
     }
@@ -102,18 +103,24 @@ const ParcelDetails = () => {
 
   const loadNames = async () => {
     if (!currentParcel) return;
-    
-    // Load auction name
     if (currentParcel.auctionId) {
       try {
         const auction = await auctionService.getAuctionById(currentParcel.auctionId);
         setAuctionName(auction?.title || `Enchère #${currentParcel.auctionId.substring(0, 8)}`);
+        if (auction?.sellerId) {
+          try {
+            const seller = await userService.getUserById(auction.sellerId);
+            setSellerName(seller ? 
+              `${seller.firstname || ''} ${seller.lastname || ''}`.trim() || seller.email :
+              `Vendeur #${auction.sellerId.substring(0, 8)}`);
+          } catch (error) {
+            setSellerName(`Vendeur #${auction.sellerId.substring(0, 8)}`);
+          }
+        }
       } catch (error) {
         setAuctionName(`Enchère #${currentParcel.auctionId.substring(0, 8)}`);
       }
     }
-    
-    // Load buyer name
     if (currentParcel.buyerId) {
       try {
         const buyer = await userService.getUserById(currentParcel.buyerId);
@@ -124,8 +131,6 @@ const ParcelDetails = () => {
         setBuyerName(`Acheteur #${currentParcel.buyerId.substring(0, 8)}`);
       }
     }
-    
-    // Load transporter name
     if (currentParcel.transporterId) {
       try {
         const transporter = await userService.getUserById(currentParcel.transporterId);
@@ -224,6 +229,16 @@ const ParcelDetails = () => {
           </View>
 
           <View style={styles.detailRow}>
+            <Ionicons name="storefront" size={20} color={Colors.primary} />
+            <View style={styles.detailContent}>
+              <ThemedText style={styles.detailLabel}>Vendeur</ThemedText>
+              <ThemedText style={styles.detailValue}>
+                {sellerName || 'Chargement...'}
+              </ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.detailRow}>
             <Ionicons name="car" size={20} color={Colors.primary} />
             <View style={styles.detailContent}>
               <ThemedText style={styles.detailLabel}>Transporteur</ThemedText>
@@ -232,6 +247,71 @@ const ParcelDetails = () => {
               </ThemedText>
             </View>
           </View>
+
+          <View style={styles.detailRow}>
+            <Ionicons name="location" size={20} color={Colors.primary} />
+            <View style={styles.detailContent}>
+              <ThemedText style={styles.detailLabel}>Point de collecte</ThemedText>
+              <ThemedText style={styles.detailValue}>
+                {currentParcel.pickUpAdress || 'Non défini'}
+              </ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Ionicons name="navigate" size={20} color={Colors.primary} />
+            <View style={styles.detailContent}>
+              <ThemedText style={styles.detailLabel}>Destination</ThemedText>
+              <ThemedText style={styles.detailValue}>
+                {currentParcel.destinationAdress || 'Non défini'}
+              </ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Ionicons name="list" size={20} color={Colors.primary} />
+            <View style={styles.detailContent}>
+              <ThemedText style={styles.detailLabel}>Statut</ThemedText>
+              <ThemedText style={[styles.detailValue, { 
+                color: currentParcel.delivred ? '#4ade80' : 
+                       currentParcel.transporterId ? '#fbbf24' : '#9ca3af'
+              }]}>
+                {currentParcel.delivred ? 'Livré' : 
+                 currentParcel.transporterId ? 'En cours de livraison' : 
+                 'En attente'}
+              </ThemedText>
+            </View>
+          </View>
+
+          {currentParcel.isValid !== null && (
+            <View style={styles.detailRow}>
+              <Ionicons 
+                name={currentParcel.isValid ? "checkmark-circle" : "alert-circle"} 
+                size={20} 
+                color={currentParcel.isValid ? "#4ade80" : "#ef4444"} 
+              />
+              <View style={styles.detailContent}>
+                <ThemedText style={styles.detailLabel}>Qualité</ThemedText>
+                <ThemedText style={[styles.detailValue, {
+                  color: currentParcel.isValid ? '#4ade80' : '#ef4444'
+                }]}>
+                  {currentParcel.isValid ? 'Produit conforme' : 'Produit non conforme'}
+                </ThemedText>
+              </View>
+            </View>
+          )}
+
+          {!currentParcel.isValid && currentParcel.unvalidDescription && (
+            <View style={styles.detailRow}>
+              <Ionicons name="document-text" size={20} color="#ef4444" />
+              <View style={styles.detailContent}>
+                <ThemedText style={styles.detailLabel}>Motif</ThemedText>
+                <ThemedText style={styles.detailValue}>
+                  {currentParcel.unvalidDescription}
+                </ThemedText>
+              </View>
+            </View>
+          )}
         </ThemedCard>
 
         {/* Quality Check Section - For Buyer Only */}
@@ -295,13 +375,13 @@ const ParcelDetails = () => {
         onRequestClose={() => setShowQualityModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.borderColor }]}>
               <ThemedText style={styles.modalTitle}>
                 Produit non conforme
               </ThemedText>
               <TouchableOpacity onPress={() => setShowQualityModal(false)}>
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -310,8 +390,13 @@ const ParcelDetails = () => {
                 Veuillez décrire le problème:
               </ThemedText>
               <TextInput
-                style={styles.descriptionInput}
+                style={[styles.descriptionInput, { 
+                  borderColor: theme.borderColor, 
+                  backgroundColor: theme.inputBackground,
+                  color: theme.title 
+                }]}
                 placeholder="Décrivez le problème rencontré..."
+                placeholderTextColor={theme.mutedText}
                 value={description}
                 onChangeText={setDescription}
                 multiline
@@ -321,7 +406,7 @@ const ParcelDetails = () => {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelModalButton]}
+                  style={[styles.modalButton, { backgroundColor: theme.uiBackground }]}
                   onPress={() => setShowQualityModal(false)}
                 >
                   <ThemedText style={styles.cancelModalButtonText}>
